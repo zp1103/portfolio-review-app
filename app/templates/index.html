@@ -240,15 +240,19 @@
                 </label>
                 <label>
                   <span>总资产</span>
-                  <input type="number" step="0.01" min="0" name="total_assets" id="total-assets-input" value="{{ form_values.total_assets }}" required />
+                  <input type="number" step="0.01" min="0" name="total_assets" id="total-assets-input" value="{{ form_values.total_assets }}" readonly required />
                 </label>
                 <label>
                   <span>现金余额</span>
-                  <input type="number" step="0.01" min="0" name="cash_balance" value="{{ form_values.cash_balance }}" required />
+                  <input type="number" step="0.01" min="0" name="cash_balance" id="cash-balance-input" value="{{ form_values.cash_balance }}" readonly required />
                 </label>
                 <label>
                   <span>本周收益</span>
                   <input type="number" step="0.01" name="weekly_return_amount" id="weekly-return-input" value="{{ form_values.weekly_return_amount }}" readonly />
+                </label>
+                <label>
+                  <span>本周收益率(%)</span>
+                  <input type="number" step="0.01" id="weekly-return-rate-input" value="{% if form_values.total_assets and form_values.weekly_return_amount %}{{ '%.2f'|format((form_values.weekly_return_amount / form_values.total_assets) * 100) }}{% endif %}" readonly />
                 </label>
                 <label>
                   <span>年内收益</span>
@@ -327,6 +331,10 @@
                         <input type="number" step="0.01" name="weekly_pnl_amount_{{ row }}" value="{{ holding.weekly_pnl_amount }}" />
                       </label>
                       <label>
+                        <span>本周收益率(%)</span>
+                        <input type="number" step="0.01" value="{% if holding.amount and holding.weekly_pnl_amount %}{{ '%.2f'|format((holding.weekly_pnl_amount / holding.amount) * 100) }}{% endif %}" class="holding-weekly-return-rate-input" readonly />
+                      </label>
+                      <label>
                         <span>估值截止日</span>
                         <input type="date" name="valuation_cutoff_date_{{ row }}" value="{{ holding.valuation_cutoff_date }}" />
                       </label>
@@ -382,7 +390,7 @@
                       <li>
                         <div>
                           <strong>{{ holding.product_name }}</strong>
-                          <span>{{ holding.category }} · {{ holding.action }} · 本周盈亏 {{ '%.2f'|format(holding.weekly_pnl_amount) }}{% if holding.valuation_cutoff_date %} · 估值截止 {{ holding.valuation_cutoff_date }}{% endif %}</span>
+                          <span>{{ holding.category }} · {{ holding.action }} · 本周盈亏 {{ '%.2f'|format(holding.weekly_pnl_amount) }} · 周收益率 {% if holding.amount %}{{ '%.2f'|format((holding.weekly_pnl_amount / holding.amount) * 100) }}%{% else %}--{% endif %}{% if holding.valuation_cutoff_date %} · 估值截止 {{ holding.valuation_cutoff_date }}{% endif %}</span>
                         </div>
                         <em>{{ '%.2f'|format(holding.amount) }}</em>
                       </li>
@@ -460,6 +468,10 @@
             <input type="number" step="0.01" name="weekly_pnl_amount___INDEX__" value="0" />
           </label>
           <label>
+            <span>本周收益率(%)</span>
+            <input type="number" step="0.01" class="holding-weekly-return-rate-input" readonly />
+          </label>
+          <label>
             <span>估值截止日</span>
             <input type="date" name="valuation_cutoff_date___INDEX__" value="" />
           </label>
@@ -475,7 +487,9 @@
       const addHoldingButtonBottom = document.getElementById("add-holding-button-bottom");
       const rowTemplate = document.getElementById("holding-row-template");
       const totalAssetsInput = document.getElementById("total-assets-input");
+      const cashBalanceInput = document.getElementById("cash-balance-input");
       const weeklyReturnInput = document.getElementById("weekly-return-input");
+      const weeklyReturnRateInput = document.getElementById("weekly-return-rate-input");
       let rowIndex = holdingsContainer.querySelectorAll(".holding-row").length;
 
       function bindRemoveButtons() {
@@ -485,6 +499,8 @@
             if (!row) return;
             row.remove();
             refreshLabels();
+            recalculateSnapshotTotals();
+            recalculateWeeklyReturn();
           };
         });
       }
@@ -513,9 +529,53 @@
         });
       }
 
+      function recalculateHoldingWeeklyReturnRates() {
+        holdingsContainer.querySelectorAll(".holding-row").forEach((row) => {
+          const amountInput = row.querySelector(".holding-amount-input");
+          const pnlInput = row.querySelector('input[name^="weekly_pnl_amount_"]');
+          const rateInput = row.querySelector(".holding-weekly-return-rate-input");
+          if (!amountInput || !pnlInput || !rateInput) return;
+          const amount = Number(amountInput.value || 0);
+          const pnl = Number(pnlInput.value || 0);
+          if (amount > 0) {
+            rateInput.value = ((pnl / amount) * 100).toFixed(2);
+          } else {
+            rateInput.value = "";
+          }
+        });
+      }
+
+      function recalculateSnapshotTotals() {
+        let totalAssets = 0;
+        let cashBalance = 0;
+        holdingsContainer.querySelectorAll(".holding-row").forEach((row) => {
+          const amountInput = row.querySelector(".holding-amount-input");
+          const categorySelect = row.querySelector('select[name^="category_"]');
+          const amount = Number(amountInput?.value || 0);
+          totalAssets += amount;
+          if (categorySelect?.value === "cash") {
+            cashBalance += amount;
+          }
+        });
+        if (totalAssetsInput) {
+          totalAssetsInput.value = totalAssets > 0 ? totalAssets.toFixed(2) : "";
+        }
+        if (cashBalanceInput) {
+          cashBalanceInput.value = cashBalance > 0 ? cashBalance.toFixed(2) : "";
+        }
+        recalculateAllocationPercents();
+        recalculateHoldingWeeklyReturnRates();
+      }
+
       function bindAmountInputs() {
         holdingsContainer.querySelectorAll(".holding-amount-input").forEach((input) => {
-          input.oninput = recalculateAllocationPercents;
+          input.oninput = recalculateSnapshotTotals;
+        });
+      }
+
+      function bindCategoryInputs() {
+        holdingsContainer.querySelectorAll('select[name^="category_"]').forEach((select) => {
+          select.onchange = recalculateSnapshotTotals;
         });
       }
 
@@ -527,6 +587,11 @@
         if (weeklyReturnInput) {
           weeklyReturnInput.value = total.toFixed(2);
         }
+        const totalAssets = Number(totalAssetsInput?.value || 0);
+        if (weeklyReturnRateInput) {
+          weeklyReturnRateInput.value = totalAssets > 0 ? ((total / totalAssets) * 100).toFixed(2) : "";
+        }
+        recalculateHoldingWeeklyReturnRates();
       }
 
       function bindWeeklyPnlInputs() {
@@ -544,9 +609,10 @@
         rowIndex += 1;
         bindRemoveButtons();
         bindAmountInputs();
+        bindCategoryInputs();
         bindWeeklyPnlInputs();
         refreshLabels();
-        recalculateAllocationPercents();
+        recalculateSnapshotTotals();
         recalculateWeeklyReturn();
         newRow?.scrollIntoView({ behavior: "smooth", block: "center" });
         newRow?.querySelector('input[name^="product_name_"]')?.focus();
@@ -554,12 +620,12 @@
 
       addHoldingButtonBottom?.addEventListener("click", appendHoldingRow);
 
-      totalAssetsInput?.addEventListener("input", recalculateAllocationPercents);
       bindRemoveButtons();
       bindAmountInputs();
+      bindCategoryInputs();
       bindWeeklyPnlInputs();
       refreshLabels();
-      recalculateAllocationPercents();
+      recalculateSnapshotTotals();
       recalculateWeeklyReturn();
     </script>
   </body>

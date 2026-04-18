@@ -88,8 +88,8 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
         holdings = _extract_holdings_from_form(form)
         payload = SnapshotCreateInput(
             snapshot_date=str(form.get("snapshot_date", "")),
-            total_assets=float(form.get("total_assets", 0) or 0),
-            cash_balance=float(form.get("cash_balance", 0) or 0),
+            total_assets=_sum_total_assets(holdings),
+            cash_balance=_sum_cash_balance(holdings),
             weekly_return_amount=_sum_weekly_pnl(holdings),
             ytd_return_amount=float(form.get("ytd_return_amount", 0) or 0),
             data_cutoff_notes=str(form.get("data_cutoff_notes", "")),
@@ -219,3 +219,11 @@ def _build_form_values(snapshot) -> dict:
 
 def _sum_weekly_pnl(holdings: list[HoldingInput]) -> float:
     return round(sum(holding.weekly_pnl_amount for holding in holdings), 2)
+
+
+def _sum_total_assets(holdings: list[HoldingInput]) -> float:
+    return round(sum(holding.amount for holding in holdings), 2)
+
+
+def _sum_cash_balance(holdings: list[HoldingInput]) -> float:
+    return round(sum(holding.amount for holding in holdings if holding.category == "cash"), 2)

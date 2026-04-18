@@ -37,6 +37,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn('name="allocation_percent_0"', response.text)
         self.assertIn('readonly', response.text)
         self.assertIn('id="weekly-return-input"', response.text)
+        self.assertIn('id="weekly-return-rate-input"', response.text)
+        self.assertIn('id="total-assets-input"', response.text)
+        self.assertIn('id="cash-balance-input"', response.text)
 
     def test_create_snapshot_endpoint_persists_payload(self) -> None:
         payload = {
@@ -107,6 +110,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("2026-04-18", response.text)
         self.assertIn("科创50", response.text)
         self.assertIn("-260.00", response.text)
+        self.assertIn("周收益率 -2.60%", response.text)
         self.assertIn("估值截止 2026-04-18", response.text)
 
     def test_form_submission_creates_snapshot_and_redirects(self) -> None:
@@ -114,8 +118,8 @@ class ApiTests(unittest.TestCase):
             "/snapshots",
             data={
                 "snapshot_date": "2026-04-25",
-                "total_assets": "430000",
-                "cash_balance": "70000",
+                "total_assets": "1",
+                "cash_balance": "1",
                 "weekly_return_amount": "2500",
                 "ytd_return_amount": "11100",
                 "data_cutoff_notes": "统一按周三口径",
@@ -129,6 +133,15 @@ class ApiTests(unittest.TestCase):
                 "weekly_pnl_amount_0": "860",
                 "valuation_cutoff_date_0": "2026-04-18",
                 "holding_notes_0": "继续加仓",
+                "product_name_1": "现金账户",
+                "account_type_1": "货币/现金账户",
+                "amount_1": "12000",
+                "allocation_percent_1": "0",
+                "category_1": "cash",
+                "action_1": "hold",
+                "weekly_pnl_amount_1": "0",
+                "valuation_cutoff_date_1": "2026-04-18",
+                "holding_notes_1": "",
             },
             follow_redirects=False,
         )
@@ -141,6 +154,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("中证全指指数组合", dashboard.text)
         snapshots = self.client.get("/api/weekly-snapshots").json()
         self.assertEqual(snapshots[0]["weekly_return_amount"], 860)
+        self.assertEqual(snapshots[0]["total_assets"], 62000)
+        self.assertEqual(snapshots[0]["cash_balance"], 12000)
 
     def test_dashboard_can_prefill_existing_snapshot_for_editing(self) -> None:
         create_response = self.client.post(
@@ -245,7 +260,8 @@ class ApiTests(unittest.TestCase):
         list_response = self.client.get("/api/weekly-snapshots")
         data = list_response.json()
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["total_assets"], 430000)
+        self.assertEqual(data[0]["total_assets"], 156174.32)
+        self.assertEqual(data[0]["cash_balance"], 0)
         self.assertEqual(data[0]["weekly_return_amount"], 1070)
         self.assertEqual(len(data[0]["holdings"]), 2)
         self.assertEqual(data[0]["holdings"][1]["weekly_pnl_amount"], -180)
