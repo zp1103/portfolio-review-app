@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>资产复盘系统</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="layout">
+        <section class="hero-panel">
+          <div class="hero-copy">
+            <p class="eyebrow">Portfolio Review</p>
+            <h1>每周资产复盘</h1>
+            <p class="intro">
+              用一份稳定、清晰的周报，把资产配置、收益变化和调仓动作持续记录下来。
+            </p>
+            <div class="hero-tags">
+              <span>本地存储</span>
+              <span>按周复盘</span>
+              <span>支持历史追踪</span>
+            </div>
+          </div>
+
+          <aside class="summary-panel">
+            <div class="summary-head">
+              <div>
+                <p class="mini-label">最新概览</p>
+                <h2>当前资产结构</h2>
+              </div>
+              <span class="summary-badge">{{ '%.2f'|format(summary.total_assets) if summary.total_assets else '未录入' }}</span>
+            </div>
+            {% if summary.categories %}
+              <ul class="summary-list">
+                {% for category, item in summary.categories.items() %}
+                  <li>
+                    <div>
+                      <span class="summary-category">{{ category }}</span>
+                      <strong>{{ '%.2f'|format(item.amount) }}</strong>
+                    </div>
+                    <em>{{ '%.2f'|format(item.percent) }}%</em>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <div class="empty-state">
+                <p>还没有周度数据。</p>
+                <span>先录入第一条快照，页面会自动生成概览。</span>
+              </div>
+            {% endif %}
+          </aside>
+        </section>
+
+        <section class="analysis-layout">
+          <section class="card target-card">
+            <div class="section-head section-head-compact">
+              <div>
+                <p class="mini-label">Targets</p>
+                <h2>目标配置</h2>
+              </div>
+            </div>
+            <form method="post" action="/targets" class="target-form">
+              <div class="field-grid target-grid">
+                <label>
+                  <span>权益</span>
+                  <div class="range-inputs">
+                    <input type="number" step="0.1" min="0" max="100" name="target_equity_min" value="{{ targets.equity.min }}" />
+                    <em>至</em>
+                    <input type="number" step="0.1" min="0" max="100" name="target_equity_max" value="{{ targets.equity.max }}" />
+                  </div>
+                </label>
+                <label>
+                  <span>固收</span>
+                  <div class="range-inputs">
+                    <input type="number" step="0.1" min="0" max="100" name="target_fixed_income_min" value="{{ targets.fixed_income.min }}" />
+                    <em>至</em>
+                    <input type="number" step="0.1" min="0" max="100" name="target_fixed_income_max" value="{{ targets.fixed_income.max }}" />
+                  </div>
+                </label>
+                <label>
+                  <span>现金</span>
+                  <div class="range-inputs">
+                    <input type="number" step="0.1" min="0" max="100" name="target_cash_min" value="{{ targets.cash.min }}" />
+                    <em>至</em>
+                    <input type="number" step="0.1" min="0" max="100" name="target_cash_max" value="{{ targets.cash.max }}" />
+                  </div>
+                </label>
+                <label>
+                  <span>黄金</span>
+                  <div class="range-inputs">
+                    <input type="number" step="0.1" min="0" max="100" name="target_gold_min" value="{{ targets.gold.min }}" />
+                    <em>至</em>
+                    <input type="number" step="0.1" min="0" max="100" name="target_gold_max" value="{{ targets.gold.max }}" />
+                  </div>
+                </label>
+              </div>
+              <div class="target-actions">
+                <button type="submit" class="ghost-button">更新目标区间</button>
+                <span>分析区会按这些区间判断仓位偏离。</span>
+              </div>
+            </form>
+          </section>
+
+          <section class="card analysis-card">
+            <div class="section-head section-head-compact">
+              <div>
+                <p class="mini-label">Diagnostics</p>
+                <h2>当前配置诊断</h2>
+              </div>
+            </div>
+            {% if analysis.diagnostics %}
+              <div class="diagnostic-grid">
+                {% for category in ["equity", "fixed_income", "cash", "gold"] %}
+                  {% set item = analysis.diagnostics.get(category) %}
+                  {% if item %}
+                    <article class="diagnostic-item diagnostic-{{ item.status }}">
+                      <header>
+                        <strong>{{ item.label }}</strong>
+                        <span>{{ item.target_text }}</span>
+                      </header>
+                      <h3>{{ '%.2f'|format(item.percent) }}%</h3>
+                      <p>当前金额 {{ '%.2f'|format(item.amount) }}</p>
+                      {% if item.status == "below" %}
+                        <em>低于目标下限 {{ '%.2f'|format(item.gap_percent) }}%</em>
+                      {% elif item.status == "above" %}
+                        <em>高于目标上限 {{ '%.2f'|format(item.gap_percent) }}%</em>
+                      {% else %}
+                        <em>处于目标区间内</em>
+                      {% endif %}
+                    </article>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              {% if analysis.suggestions %}
+                <div class="suggestion-box">
+                  <h3>本周建议</h3>
+                  <ul>
+                    {% for suggestion in analysis.suggestions %}
+                      <li>{{ suggestion }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+            {% else %}
+              <div class="empty-history">
+                <p>还没有配置诊断。</p>
+                <span>录入一条完整快照后，这里会给出仓位偏离和建议。</span>
+              </div>
+            {% endif %}
+          </section>
+        </section>
+
+        <section class="card attribution-card">
+          <div class="section-head section-head-compact">
+            <div>
+              <p class="mini-label">Attribution</p>
+              <h2>本周收益归因</h2>
+            </div>
+          </div>
+          {% if weekly_attribution.top_contributors %}
+            <div class="attribution-layout">
+              <section class="attribution-column">
+                <h3>盈利贡献前 3</h3>
+                <ul class="mini-ranking">
+                  {% for item in weekly_attribution.top_contributors %}
+                    <li>
+                      <div>
+                        <strong>{{ item.product_name }}</strong>
+                        <span>{{ category_labels.get(item.category, item.category) }}</span>
+                      </div>
+                      <em>+{{ '%.2f'|format(item.weekly_pnl_amount) }}</em>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </section>
+              <section class="attribution-column">
+                <h3>拖累前 3</h3>
+                <ul class="mini-ranking">
+                  {% for item in weekly_attribution.top_detractors %}
+                    <li>
+                      <div>
+                        <strong>{{ item.product_name }}</strong>
+                        <span>{{ category_labels.get(item.category, item.category) }}</span>
+                      </div>
+                      <em>{{ '%.2f'|format(item.weekly_pnl_amount) }}</em>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </section>
+              <section class="attribution-column">
+                <h3>按资产类别汇总</h3>
+                <ul class="mini-ranking">
+                  {% for category, amount in weekly_attribution.category_breakdown.items() %}
+                    <li>
+                      <div>
+                        <strong>{{ category_labels.get(category, category) }}</strong>
+                        <span>本周分类收益</span>
+                      </div>
+                      <em>{% if amount > 0 %}+{% endif %}{{ '%.2f'|format(amount) }}</em>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </section>
+            </div>
+          {% else %}
+            <div class="empty-history">
+              <p>还没有收益归因。</p>
+              <span>录入每条持仓的本周盈亏后，这里会自动汇总贡献和拖累项。</span>
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="card form-card">
+          <div class="section-head">
+            <div>
+              <p class="mini-label">Weekly Input</p>
+              <h2>{% if editing_snapshot %}编辑快照{% else %}每周录入{% endif %}</h2>
+              <p>
+                {% if editing_snapshot %}
+                  正在编辑 {{ editing_snapshot.snapshot_date }} 的快照。可以继续补充持仓，保存后会覆盖原记录。
+                {% else %}
+                  先填写本周总览，再补充持仓明细。每条持仓都可以带上本周动作和备注。
+                {% endif %}
+              </p>
+            </div>
+          </div>
+
+          <form method="post" action="/snapshots" class="snapshot-form">
+            <input type="hidden" name="snapshot_id" value="{{ form_values.snapshot_id }}" />
+            <section class="subsection">
+              <div class="subsection-head">
+                <h3>本周总览</h3>
+                <span>总资产与收益</span>
+              </div>
+              <div class="field-grid overview-grid">
+                <label>
+                  <span>快照日期</span>
+                  <input type="date" name="snapshot_date" value="{{ form_values.snapshot_date }}" required />
+                </label>
+                <label>
+                  <span>总资产</span>
+                  <input type="number" step="0.01" min="0" name="total_assets" id="total-assets-input" value="{{ form_values.total_assets }}" required />
+                </label>
+                <label>
+                  <span>现金余额</span>
+                  <input type="number" step="0.01" min="0" name="cash_balance" value="{{ form_values.cash_balance }}" required />
+                </label>
+                <label>
+                  <span>本周收益</span>
+                  <input type="number" step="0.01" name="weekly_return_amount" id="weekly-return-input" value="{{ form_values.weekly_return_amount }}" readonly />
+                </label>
+                <label>
+                  <span>年内收益</span>
+                  <input type="number" step="0.01" name="ytd_return_amount" value="{{ form_values.ytd_return_amount }}" />
+                </label>
+                <label class="full-width">
+                  <span>数据截止说明</span>
+                  <input type="text" name="data_cutoff_notes" value="{{ form_values.data_cutoff_notes }}" placeholder="例如：普通账户到周五，第三方到账周四，养老金到账周三；正式周收益统一按周三口径。" />
+                </label>
+                <label class="full-width">
+                  <span>本周备注</span>
+                  <textarea name="notes" rows="4" placeholder="例如：因地缘风险降低了稳健仓位，开始分批建科创50。">{{ form_values.notes }}</textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="subsection-head">
+                <h3>持仓明细</h3>
+                <span>支持多条记录</span>
+              </div>
+
+              <div id="holdings-container" class="holdings-container">
+                {% for row in default_rows %}
+                  {% set holding = form_values.holdings[row] %}
+                  <section class="holding-row" data-row-index="{{ row }}">
+                    <div class="holding-row-head">
+                      <div>
+                        <p class="holding-kicker">Holding</p>
+                        <h3>持仓项 {{ row + 1 }}</h3>
+                      </div>
+                      <button type="button" class="ghost-button danger-button remove-holding-button" {% if row == 0 %}disabled{% endif %}>删除</button>
+                    </div>
+                    <div class="field-grid holding-grid">
+                      <label class="span-2">
+                        <span>产品名称</span>
+                        <input type="text" name="product_name_{{ row }}" value="{{ holding.product_name }}" required />
+                      </label>
+                      <label>
+                        <span>账户类型</span>
+                        <select name="account_type_{{ row }}">
+                          {% for option in account_type_options %}
+                            <option value="{{ option }}" {% if option == holding.account_type %}selected{% endif %}>{{ option }}</option>
+                          {% endfor %}
+                        </select>
+                      </label>
+                      <label>
+                        <span>金额</span>
+                        <input type="number" step="0.01" min="0" name="amount_{{ row }}" value="{{ holding.amount }}" class="holding-amount-input" required />
+                      </label>
+                      <label>
+                        <span>占总资产比(%)</span>
+                        <input type="number" step="0.01" min="0" max="100" name="allocation_percent_{{ row }}" value="{{ holding.allocation_percent }}" class="allocation-percent-input" readonly required />
+                      </label>
+                      <label>
+                        <span>资产类别</span>
+                        <select name="category_{{ row }}">
+                          <option value="equity" {% if holding.category == "equity" %}selected{% endif %}>权益</option>
+                          <option value="fixed_income" {% if holding.category == "fixed_income" %}selected{% endif %}>固收</option>
+                          <option value="cash" {% if holding.category == "cash" %}selected{% endif %}>现金</option>
+                          <option value="gold" {% if holding.category == "gold" %}selected{% endif %}>黄金</option>
+                          <option value="other" {% if holding.category == "other" %}selected{% endif %}>其他</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>本周动作</span>
+                        <select name="action_{{ row }}">
+                          <option value="hold" {% if holding.action == "hold" %}selected{% endif %}>持有</option>
+                          <option value="buy" {% if holding.action == "buy" %}selected{% endif %}>买入</option>
+                          <option value="sell" {% if holding.action == "sell" %}selected{% endif %}>卖出</option>
+                          <option value="rebalance" {% if holding.action == "rebalance" %}selected{% endif %}>调仓</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>本周盈亏金额</span>
+                        <input type="number" step="0.01" name="weekly_pnl_amount_{{ row }}" value="{{ holding.weekly_pnl_amount }}" />
+                      </label>
+                      <label>
+                        <span>估值截止日</span>
+                        <input type="date" name="valuation_cutoff_date_{{ row }}" value="{{ holding.valuation_cutoff_date }}" />
+                      </label>
+                      <label class="full-width">
+                        <span>持仓备注</span>
+                        <input type="text" name="holding_notes_{{ row }}" value="{{ holding.notes }}" placeholder="例如：继续加仓核心宽基" />
+                      </label>
+                    </div>
+                  </section>
+                {% endfor %}
+              </div>
+              <div class="holdings-footer-actions">
+                <div class="holdings-footer-buttons">
+                  <button type="button" class="secondary-button secondary-button-wide" id="add-holding-button-bottom">继续新增持仓</button>
+                  <button type="submit" class="primary-button primary-button-wide">{% if editing_snapshot %}保存修改{% else %}保存本周快照{% endif %}</button>
+                </div>
+                <span>
+                  {% if editing_snapshot %}
+                    继续补录后可以直接在这里保存，覆盖当前快照。
+                  {% else %}
+                    录到这里时可以继续补下一条，或直接保存，不用回到顶部。
+                  {% endif %}
+                </span>
+              </div>
+            </section>
+          </form>
+        </section>
+
+        <section class="card history-card">
+          <div class="section-head section-head-compact">
+            <div>
+              <p class="mini-label">History</p>
+              <h2>历史快照</h2>
+            </div>
+          </div>
+          {% if snapshots %}
+            <div class="snapshot-list">
+              {% for snapshot in snapshots %}
+                <article class="snapshot-item">
+                  <header>
+                    <div>
+                      <p class="snapshot-date">{{ snapshot.snapshot_date }}</p>
+                      <h3>总资产 {{ '%.2f'|format(snapshot.total_assets) }}</h3>
+                    </div>
+                    <div class="snapshot-metrics">
+                      <span>本周 {{ '%.2f'|format(snapshot.weekly_return_amount) }}</span>
+                      <span>年内 {{ '%.2f'|format(snapshot.ytd_return_amount) }}</span>
+                      <a href="/?edit_id={{ snapshot.id }}" class="inline-link">编辑</a>
+                    </div>
+                  </header>
+                  <ul>
+                    {% for holding in snapshot.holdings %}
+                      <li>
+                        <div>
+                          <strong>{{ holding.product_name }}</strong>
+                          <span>{{ holding.category }} · {{ holding.action }} · 本周盈亏 {{ '%.2f'|format(holding.weekly_pnl_amount) }}{% if holding.valuation_cutoff_date %} · 估值截止 {{ holding.valuation_cutoff_date }}{% endif %}</span>
+                        </div>
+                        <em>{{ '%.2f'|format(holding.amount) }}</em>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                  {% if snapshot.notes %}
+                    <p class="notes">{{ snapshot.notes }}</p>
+                  {% endif %}
+                  {% if snapshot.data_cutoff_notes %}
+                    <p class="notes">{{ snapshot.data_cutoff_notes }}</p>
+                  {% endif %}
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-history">
+              <p>暂无历史快照。</p>
+              <span>录入第一周数据后，这里会开始积累可复盘的历史轨迹。</span>
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+    <template id="holding-row-template">
+      <section class="holding-row" data-row-index="__INDEX__">
+        <div class="holding-row-head">
+          <div>
+            <p class="holding-kicker">Holding</p>
+            <h3>持仓项 __LABEL__</h3>
+          </div>
+          <button type="button" class="ghost-button danger-button remove-holding-button">删除</button>
+        </div>
+        <div class="field-grid holding-grid">
+          <label class="span-2">
+            <span>产品名称</span>
+            <input type="text" name="product_name___INDEX__" required />
+          </label>
+          <label>
+            <span>账户类型</span>
+            <select name="account_type___INDEX__">
+              {% for option in account_type_options %}
+                <option value="{{ option }}">{{ option }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>金额</span>
+            <input type="number" step="0.01" min="0" name="amount___INDEX__" class="holding-amount-input" required />
+          </label>
+          <label>
+            <span>占总资产比(%)</span>
+            <input type="number" step="0.01" min="0" max="100" name="allocation_percent___INDEX__" class="allocation-percent-input" readonly required />
+          </label>
+          <label>
+            <span>资产类别</span>
+            <select name="category___INDEX__">
+              <option value="equity">权益</option>
+              <option value="fixed_income">固收</option>
+              <option value="cash">现金</option>
+              <option value="gold">黄金</option>
+              <option value="other">其他</option>
+            </select>
+          </label>
+          <label>
+            <span>本周动作</span>
+            <select name="action___INDEX__">
+              <option value="hold">持有</option>
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+              <option value="rebalance">调仓</option>
+            </select>
+          </label>
+          <label>
+            <span>本周盈亏金额</span>
+            <input type="number" step="0.01" name="weekly_pnl_amount___INDEX__" value="0" />
+          </label>
+          <label>
+            <span>估值截止日</span>
+            <input type="date" name="valuation_cutoff_date___INDEX__" value="" />
+          </label>
+          <label class="full-width">
+            <span>持仓备注</span>
+            <input type="text" name="holding_notes___INDEX__" placeholder="例如：继续加仓核心宽基" />
+          </label>
+        </div>
+      </section>
+    </template>
+    <script>
+      const holdingsContainer = document.getElementById("holdings-container");
+      const addHoldingButtonBottom = document.getElementById("add-holding-button-bottom");
+      const rowTemplate = document.getElementById("holding-row-template");
+      const totalAssetsInput = document.getElementById("total-assets-input");
+      const weeklyReturnInput = document.getElementById("weekly-return-input");
+      let rowIndex = holdingsContainer.querySelectorAll(".holding-row").length;
+
+      function bindRemoveButtons() {
+        holdingsContainer.querySelectorAll(".remove-holding-button").forEach((button) => {
+          button.onclick = () => {
+            const row = button.closest(".holding-row");
+            if (!row) return;
+            row.remove();
+            refreshLabels();
+          };
+        });
+      }
+
+      function refreshLabels() {
+        holdingsContainer.querySelectorAll(".holding-row").forEach((row, index) => {
+          const title = row.querySelector("h3");
+          if (title) title.textContent = `持仓项 ${index + 1}`;
+          const removeButton = row.querySelector(".remove-holding-button");
+          if (removeButton) removeButton.disabled = holdingsContainer.querySelectorAll(".holding-row").length === 1;
+        });
+      }
+
+      function recalculateAllocationPercents() {
+        const totalAssets = Number(totalAssetsInput?.value || 0);
+        holdingsContainer.querySelectorAll(".holding-row").forEach((row) => {
+          const amountInput = row.querySelector(".holding-amount-input");
+          const percentInput = row.querySelector(".allocation-percent-input");
+          if (!amountInput || !percentInput) return;
+          const amount = Number(amountInput.value || 0);
+          if (totalAssets > 0 && amount >= 0) {
+            percentInput.value = ((amount / totalAssets) * 100).toFixed(2);
+          } else {
+            percentInput.value = "";
+          }
+        });
+      }
+
+      function bindAmountInputs() {
+        holdingsContainer.querySelectorAll(".holding-amount-input").forEach((input) => {
+          input.oninput = recalculateAllocationPercents;
+        });
+      }
+
+      function recalculateWeeklyReturn() {
+        let total = 0;
+        holdingsContainer.querySelectorAll('input[name^="weekly_pnl_amount_"]').forEach((input) => {
+          total += Number(input.value || 0);
+        });
+        if (weeklyReturnInput) {
+          weeklyReturnInput.value = total.toFixed(2);
+        }
+      }
+
+      function bindWeeklyPnlInputs() {
+        holdingsContainer.querySelectorAll('input[name^="weekly_pnl_amount_"]').forEach((input) => {
+          input.oninput = recalculateWeeklyReturn;
+        });
+      }
+
+      function appendHoldingRow() {
+        const html = rowTemplate.innerHTML
+          .replaceAll(/__INDEX__/g, String(rowIndex))
+          .replaceAll(/__LABEL__/g, String(holdingsContainer.querySelectorAll(".holding-row").length + 1));
+        holdingsContainer.insertAdjacentHTML("beforeend", html);
+        const newRow = holdingsContainer.lastElementChild;
+        rowIndex += 1;
+        bindRemoveButtons();
+        bindAmountInputs();
+        bindWeeklyPnlInputs();
+        refreshLabels();
+        recalculateAllocationPercents();
+        recalculateWeeklyReturn();
+        newRow?.scrollIntoView({ behavior: "smooth", block: "center" });
+        newRow?.querySelector('input[name^="product_name_"]')?.focus();
+      }
+
+      addHoldingButtonBottom?.addEventListener("click", appendHoldingRow);
+
+      totalAssetsInput?.addEventListener("input", recalculateAllocationPercents);
+      bindRemoveButtons();
+      bindAmountInputs();
+      bindWeeklyPnlInputs();
+      refreshLabels();
+      recalculateAllocationPercents();
+      recalculateWeeklyReturn();
+    </script>
+  </body>
+</html>
