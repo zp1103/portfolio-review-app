@@ -501,6 +501,18 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(179, 92, 46, 0.12);
 }
 
+input[readonly].derived-input {
+  background: rgba(29, 40, 65, 0.04);
+  border-color: rgba(37, 45, 68, 0.08);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+input[readonly].derived-input:focus {
+  border-color: rgba(37, 45, 68, 0.12);
+  box-shadow: none;
+}
+
 textarea {
   min-height: 108px;
   resize: vertical;

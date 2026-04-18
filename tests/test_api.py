@@ -322,6 +322,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("目标配置", response.text)
         self.assertIn("当前配置诊断", response.text)
         self.assertIn("本周收益归因", response.text)
+        self.assertIn("固收", response.text)
+        self.assertIn("现金", response.text)
 
 
 if __name__ == "__main__":
