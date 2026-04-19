@@ -351,8 +351,10 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("目标配置", response.text)
-        self.assertIn("当前配置诊断", response.text)
         self.assertIn("穿透配置诊断", response.text)
+        self.assertIn("主分类口径诊断", response.text)
+        self.assertIn("推荐参考", response.text)
+        self.assertIn("辅助口径", response.text)
         self.assertIn("本周收益归因", response.text)
         self.assertIn("净资金流", response.text)
         self.assertIn("较上一期推算净流入", response.text)

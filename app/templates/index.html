@@ -105,14 +105,14 @@
           <section class="card analysis-card">
             <div class="section-head section-head-compact">
               <div>
-                <p class="mini-label">Diagnostics</p>
-                <h2>当前配置诊断</h2>
+                <p class="mini-label">Lookthrough · 推荐参考</p>
+                <h2>穿透配置诊断</h2>
               </div>
             </div>
-            {% if analysis.diagnostics %}
+            {% if lookthrough_analysis.diagnostics %}
               <div class="diagnostic-grid">
                 {% for category in ["equity", "fixed_income", "cash", "gold"] %}
-                  {% set item = analysis.diagnostics.get(category) %}
+                  {% set item = lookthrough_analysis.diagnostics.get(category) %}
                   {% if item %}
                     <article class="diagnostic-item diagnostic-{{ item.status }}">
                       <header>
@@ -120,7 +120,7 @@
                         <span>{{ item.target_text }}</span>
                       </header>
                       <h3>{{ '%.2f'|format(item.percent) }}%</h3>
-                      <p>当前金额 {{ '%.2f'|format(item.amount) }}</p>
+                      <p>穿透金额 {{ '%.2f'|format(item.amount) }}</p>
                       {% if item.status == "below" %}
                         <em>低于目标下限 {{ '%.2f'|format(item.gap_percent) }}%</em>
                       {% elif item.status == "above" %}
@@ -132,11 +132,11 @@
                   {% endif %}
                 {% endfor %}
               </div>
-              {% if analysis.suggestions %}
+              {% if lookthrough_analysis.suggestions %}
                 <div class="suggestion-box">
-                  <h3>本周建议</h3>
+                  <h3>穿透建议</h3>
                   <ul>
-                    {% for suggestion in analysis.suggestions %}
+                    {% for suggestion in lookthrough_analysis.suggestions %}
                       <li>{{ suggestion }}</li>
                     {% endfor %}
                   </ul>
@@ -144,8 +144,8 @@
               {% endif %}
             {% else %}
               <div class="empty-history">
-                <p>还没有配置诊断。</p>
-                <span>录入一条完整快照后，这里会给出仓位偏离和建议。</span>
+                <p>还没有穿透配置诊断。</p>
+                <span>录入一条完整快照后，这里会按底层比例重算真实资产暴露。</span>
               </div>
             {% endif %}
           </section>
@@ -154,14 +154,14 @@
         <section class="card attribution-card">
           <div class="section-head section-head-compact">
             <div>
-              <p class="mini-label">Lookthrough</p>
-              <h2>穿透配置诊断</h2>
+              <p class="mini-label">Diagnostics · 辅助口径</p>
+              <h2>主分类口径诊断</h2>
             </div>
           </div>
-          {% if lookthrough_analysis.diagnostics %}
+          {% if analysis.diagnostics %}
             <div class="diagnostic-grid">
               {% for category in ["equity", "fixed_income", "cash", "gold"] %}
-                {% set item = lookthrough_analysis.diagnostics.get(category) %}
+                {% set item = analysis.diagnostics.get(category) %}
                 {% if item %}
                   <article class="diagnostic-item diagnostic-{{ item.status }}">
                     <header>
@@ -169,7 +169,7 @@
                       <span>{{ item.target_text }}</span>
                     </header>
                     <h3>{{ '%.2f'|format(item.percent) }}%</h3>
-                    <p>穿透金额 {{ '%.2f'|format(item.amount) }}</p>
+                    <p>当前金额 {{ '%.2f'|format(item.amount) }}</p>
                     {% if item.status == "below" %}
                       <em>低于目标下限 {{ '%.2f'|format(item.gap_percent) }}%</em>
                     {% elif item.status == "above" %}
@@ -181,11 +181,11 @@
                 {% endif %}
               {% endfor %}
             </div>
-            {% if lookthrough_analysis.suggestions %}
+            {% if analysis.suggestions %}
               <div class="suggestion-box">
-                <h3>穿透建议</h3>
+                <h3>辅助建议</h3>
                 <ul>
-                  {% for suggestion in lookthrough_analysis.suggestions %}
+                  {% for suggestion in analysis.suggestions %}
                     <li>{{ suggestion }}</li>
                   {% endfor %}
                 </ul>
@@ -193,8 +193,8 @@
             {% endif %}
           {% else %}
             <div class="empty-history">
-              <p>还没有穿透配置诊断。</p>
-              <span>录入一条完整快照后，这里会按底层比例重算真实资产暴露。</span>
+              <p>还没有主分类诊断。</p>
+              <span>录入一条完整快照后，这里会按每条持仓的主资产类别给出辅助判断。</span>
             </div>
           {% endif %}
         </section>
