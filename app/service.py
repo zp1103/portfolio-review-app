@@ -30,6 +30,8 @@ CATEGORY_LABELS = {
     "other": "其他",
 }
 
+LOOKTHROUGH_CATEGORIES = ("equity", "fixed_income", "cash", "gold", "other")
+
 
 class PortfolioService:
     def __init__(self, database: Database) -> None:
@@ -257,6 +259,54 @@ class PortfolioService:
             "suggestions": suggestions[:4],
         }
 
+    def get_lookthrough_analysis(self) -> dict:
+        snapshots = self.list_snapshots()
+        targets = self.get_target_allocation()
+        if not snapshots:
+            return {"targets": targets, "diagnostics": {}, "suggestions": []}
+
+        latest = snapshots[0]
+        grouped_amounts = self._get_lookthrough_amounts(latest.holdings)
+        diagnostics: dict[str, dict] = {}
+        suggestions: list[str] = []
+
+        for category in LOOKTHROUGH_CATEGORIES:
+            amount = round(grouped_amounts.get(category, 0.0), 2)
+            percent = round((amount / latest.total_assets) * 100, 2) if latest.total_assets else 0
+            target = targets.get(category)
+            status = "in_range"
+            gap = 0.0
+            target_text = "未设置"
+            if target:
+                target_text = f'{target["min"]:.0f}% - {target["max"]:.0f}%'
+                if percent < target["min"]:
+                    status = "below"
+                    gap = round(target["min"] - percent, 2)
+                    suggestions.append(
+                        f"穿透后{CATEGORY_LABELS[category]}低于目标下限 {gap:.2f}% ，后续新增资金可优先补这类资产。"
+                    )
+                elif percent > target["max"]:
+                    status = "above"
+                    gap = round(percent - target["max"], 2)
+                    suggestions.append(
+                        f"穿透后{CATEGORY_LABELS[category]}高于目标上限 {gap:.2f}% ，后续新增资金可暂停追加。"
+                    )
+
+            diagnostics[category] = {
+                "label": CATEGORY_LABELS[category],
+                "amount": amount,
+                "percent": percent,
+                "target_text": target_text,
+                "status": status,
+                "gap_percent": gap,
+            }
+
+        return {
+            "targets": targets,
+            "diagnostics": diagnostics,
+            "suggestions": suggestions[:4],
+        }
+
     def get_weekly_attribution(self) -> dict:
         snapshots = self.list_snapshots()
         if not snapshots:
@@ -342,8 +392,13 @@ class PortfolioService:
                 action,
                 weekly_pnl_amount,
                 valuation_cutoff_date,
+                exposure_equity_percent,
+                exposure_fixed_income_percent,
+                exposure_cash_percent,
+                exposure_gold_percent,
+                exposure_other_percent,
                 notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
@@ -355,6 +410,11 @@ class PortfolioService:
                 holding.action,
                 holding.weekly_pnl_amount,
                 holding.valuation_cutoff_date,
+                holding.exposure_equity_percent,
+                holding.exposure_fixed_income_percent,
+                holding.exposure_cash_percent,
+                holding.exposure_gold_percent,
+                holding.exposure_other_percent,
                 holding.notes,
             ),
         )
@@ -367,3 +427,35 @@ class PortfolioService:
             "category": holding.category,
             "label": CATEGORY_LABELS.get(holding.category, holding.category),
         }
+
+    def _get_lookthrough_amounts(self, holdings: list[HoldingRecord]) -> dict[str, float]:
+        grouped_amounts: dict[str, float] = defaultdict(float)
+        for holding in holdings:
+            exposures = self._holding_exposures(holding)
+            for category, percent in exposures.items():
+                grouped_amounts[category] += holding.amount * percent / 100
+        return grouped_amounts
+
+    def _holding_exposures(self, holding: HoldingRecord) -> dict[str, float]:
+        exposures = {
+            "equity": holding.exposure_equity_percent,
+            "fixed_income": holding.exposure_fixed_income_percent,
+            "cash": holding.exposure_cash_percent,
+            "gold": holding.exposure_gold_percent,
+            "other": holding.exposure_other_percent,
+        }
+        total = sum(exposures.values())
+        if total <= 0:
+            return {
+                category: 100.0 if category == holding.category else 0.0
+                for category in LOOKTHROUGH_CATEGORIES
+            }
+        if total < 100:
+            exposures["other"] += 100 - total
+            return exposures
+        if total > 100:
+            return {
+                category: round(percent / total * 100, 6)
+                for category, percent in exposures.items()
+            }
+        return exposures

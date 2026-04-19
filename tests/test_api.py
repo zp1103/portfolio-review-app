@@ -40,6 +40,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="weekly-return-rate-input"', response.text)
         self.assertIn('id="total-assets-input"', response.text)
         self.assertIn('id="cash-balance-input"', response.text)
+        self.assertIn('name="exposure_equity_percent_0"', response.text)
+        self.assertIn("底层穿透比例", response.text)
 
     def test_create_snapshot_endpoint_persists_payload(self) -> None:
         payload = {
@@ -141,6 +143,11 @@ class ApiTests(unittest.TestCase):
                 "action_1": "hold",
                 "weekly_pnl_amount_1": "0",
                 "valuation_cutoff_date_1": "2026-04-18",
+                "exposure_equity_percent_1": "0",
+                "exposure_fixed_income_percent_1": "0",
+                "exposure_cash_percent_1": "100",
+                "exposure_gold_percent_1": "0",
+                "exposure_other_percent_1": "0",
                 "holding_notes_1": "",
             },
             follow_redirects=False,
@@ -156,6 +163,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(snapshots[0]["weekly_return_amount"], 860)
         self.assertEqual(snapshots[0]["total_assets"], 62000)
         self.assertEqual(snapshots[0]["cash_balance"], 12000)
+        self.assertEqual(snapshots[0]["holdings"][1]["exposure_cash_percent"], 100)
 
     def test_dashboard_can_prefill_existing_snapshot_for_editing(self) -> None:
         create_response = self.client.post(
@@ -344,6 +352,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("目标配置", response.text)
         self.assertIn("当前配置诊断", response.text)
+        self.assertIn("穿透配置诊断", response.text)
         self.assertIn("本周收益归因", response.text)
         self.assertIn("净资金流", response.text)
         self.assertIn("较上一期推算净流入", response.text)

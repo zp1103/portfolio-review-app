@@ -349,6 +349,45 @@ class PortfolioServiceTests(unittest.TestCase):
         self.assertEqual(cashflow["direction"], "inflow")
         self.assertIn("净流入 12000.00", cashflow["formula_text"])
 
+    def test_lookthrough_analysis_uses_holding_exposure_percentages(self) -> None:
+        self.service.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-04-18",
+                total_assets=200000,
+                cash_balance=0,
+                weekly_return_amount=1200,
+                holdings=[
+                    HoldingInput(
+                        product_name="全球稳健配置组合",
+                        account_type="第三方平台账户",
+                        amount=100000,
+                        allocation_percent=50,
+                        category="fixed_income",
+                        weekly_pnl_amount=600,
+                        exposure_equity_percent=30,
+                        exposure_fixed_income_percent=60,
+                        exposure_cash_percent=10,
+                    ),
+                    HoldingInput(
+                        product_name="中证全指指数组合",
+                        account_type="第三方平台账户",
+                        amount=100000,
+                        allocation_percent=50,
+                        category="equity",
+                        weekly_pnl_amount=600,
+                    ),
+                ],
+            )
+        )
+
+        lookthrough = self.service.get_lookthrough_analysis()
+
+        self.assertEqual(lookthrough["diagnostics"]["equity"]["amount"], 130000)
+        self.assertEqual(lookthrough["diagnostics"]["equity"]["percent"], 65)
+        self.assertEqual(lookthrough["diagnostics"]["fixed_income"]["amount"], 60000)
+        self.assertEqual(lookthrough["diagnostics"]["cash"]["amount"], 10000)
+        self.assertEqual(lookthrough["diagnostics"]["other"]["amount"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

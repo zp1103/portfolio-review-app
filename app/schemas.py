@@ -19,6 +19,11 @@ class HoldingInput(BaseModel):
     action: Action = "hold"
     weekly_pnl_amount: float = 0
     valuation_cutoff_date: str = ""
+    exposure_equity_percent: float = Field(default=0, ge=0, le=100)
+    exposure_fixed_income_percent: float = Field(default=0, ge=0, le=100)
+    exposure_cash_percent: float = Field(default=0, ge=0, le=100)
+    exposure_gold_percent: float = Field(default=0, ge=0, le=100)
+    exposure_other_percent: float = Field(default=0, ge=0, le=100)
     notes: str = ""
 
 
@@ -91,5 +96,10 @@ def holding_from_row(row: Mapping[str, object]) -> HoldingRecord:
         action=str(row["action"]),
         weekly_pnl_amount=float(row["weekly_pnl_amount"] or 0),
         valuation_cutoff_date=str(row["valuation_cutoff_date"] or ""),
+        exposure_equity_percent=float(row["exposure_equity_percent"] or 0),
+        exposure_fixed_income_percent=float(row["exposure_fixed_income_percent"] or 0),
+        exposure_cash_percent=float(row["exposure_cash_percent"] or 0),
+        exposure_gold_percent=float(row["exposure_gold_percent"] or 0),
+        exposure_other_percent=float(row["exposure_other_percent"] or 0),
         notes=str(row["notes"] or ""),
     )

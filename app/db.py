@@ -52,6 +52,11 @@ class Database:
                     action TEXT NOT NULL DEFAULT 'hold',
                     weekly_pnl_amount REAL NOT NULL DEFAULT 0,
                     valuation_cutoff_date TEXT NOT NULL DEFAULT '',
+                    exposure_equity_percent REAL NOT NULL DEFAULT 0,
+                    exposure_fixed_income_percent REAL NOT NULL DEFAULT 0,
+                    exposure_cash_percent REAL NOT NULL DEFAULT 0,
+                    exposure_gold_percent REAL NOT NULL DEFAULT 0,
+                    exposure_other_percent REAL NOT NULL DEFAULT 0,
                     notes TEXT NOT NULL DEFAULT '',
                     FOREIGN KEY(snapshot_id) REFERENCES weekly_snapshots(id) ON DELETE CASCADE
                 );
@@ -91,6 +96,17 @@ class Database:
                 connection.execute(
                     "ALTER TABLE holdings ADD COLUMN valuation_cutoff_date TEXT NOT NULL DEFAULT ''"
                 )
+            for exposure_column in (
+                "exposure_equity_percent",
+                "exposure_fixed_income_percent",
+                "exposure_cash_percent",
+                "exposure_gold_percent",
+                "exposure_other_percent",
+            ):
+                if exposure_column not in columns:
+                    connection.execute(
+                        f"ALTER TABLE holdings ADD COLUMN {exposure_column} REAL NOT NULL DEFAULT 0"
+                    )
 
             connection.execute(
                 """

@@ -51,6 +51,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
         summary = service.get_allocation_summary()
         targets = service.get_target_allocation()
         analysis = service.get_portfolio_analysis()
+        lookthrough_analysis = service.get_lookthrough_analysis()
         weekly_attribution = service.get_weekly_attribution()
         cashflow_analysis = service.get_cashflow_analysis()
         editing_snapshot = None
@@ -65,6 +66,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
                 "summary": summary,
                 "targets": targets,
                 "analysis": analysis,
+                "lookthrough_analysis": lookthrough_analysis,
                 "weekly_attribution": weekly_attribution,
                 "cashflow_analysis": cashflow_analysis,
                 "category_labels": CATEGORY_LABELS,
@@ -161,6 +163,13 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
                 action=str(form.get(f"action_{index}", "hold")),
                 weekly_pnl_amount=float(form.get(f"weekly_pnl_amount_{index}", 0) or 0),
                 valuation_cutoff_date=str(form.get(f"valuation_cutoff_date_{index}", "")),
+                exposure_equity_percent=float(form.get(f"exposure_equity_percent_{index}", 0) or 0),
+                exposure_fixed_income_percent=float(
+                    form.get(f"exposure_fixed_income_percent_{index}", 0) or 0
+                ),
+                exposure_cash_percent=float(form.get(f"exposure_cash_percent_{index}", 0) or 0),
+                exposure_gold_percent=float(form.get(f"exposure_gold_percent_{index}", 0) or 0),
+                exposure_other_percent=float(form.get(f"exposure_other_percent_{index}", 0) or 0),
                 notes=str(form.get(f"holding_notes_{index}", "")),
             )
         )
@@ -188,6 +197,11 @@ def _build_form_values(snapshot) -> dict:
                     "action": "hold",
                     "weekly_pnl_amount": 0,
                     "valuation_cutoff_date": "",
+                    "exposure_equity_percent": "",
+                    "exposure_fixed_income_percent": "",
+                    "exposure_cash_percent": "",
+                    "exposure_gold_percent": "",
+                    "exposure_other_percent": "",
                     "notes": "",
                 }
             ],
@@ -212,6 +226,11 @@ def _build_form_values(snapshot) -> dict:
                 "action": holding.action,
                 "weekly_pnl_amount": holding.weekly_pnl_amount,
                 "valuation_cutoff_date": holding.valuation_cutoff_date,
+                "exposure_equity_percent": holding.exposure_equity_percent,
+                "exposure_fixed_income_percent": holding.exposure_fixed_income_percent,
+                "exposure_cash_percent": holding.exposure_cash_percent,
+                "exposure_gold_percent": holding.exposure_gold_percent,
+                "exposure_other_percent": holding.exposure_other_percent,
                 "notes": holding.notes,
             }
             for holding in snapshot.holdings

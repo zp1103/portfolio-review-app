@@ -582,6 +582,34 @@ textarea {
   gap: 6px;
 }
 
+.exposure-panel {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(29, 40, 65, 0.035);
+  border: 1px dashed rgba(37, 45, 68, 0.14);
+}
+
+.exposure-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.exposure-head span {
+  font-weight: 700;
+}
+
+.exposure-head em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 0.88rem;
+}
+
+.exposure-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button {
@@ -726,6 +754,10 @@ textarea {
   .holding-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .exposure-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -746,6 +778,7 @@ textarea {
   .section-head,
   .subsection-head,
   .holding-row-head,
+  .exposure-head,
   .target-actions,
   .holdings-footer-actions,
   .snapshot-item header {
@@ -754,7 +787,8 @@ textarea {
   }
 
   .overview-grid,
-  .holding-grid {
+  .holding-grid,
+  .exposure-grid {
     grid-template-columns: 1fr;
   }
 
