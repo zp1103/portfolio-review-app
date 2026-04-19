@@ -383,6 +383,53 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.cashflow-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.cashflow-primary,
+.cashflow-formula {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(37, 45, 68, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.cashflow-primary {
+  display: grid;
+  gap: 8px;
+}
+
+.cashflow-primary span,
+.cashflow-primary p,
+.cashflow-formula p,
+.cashflow-formula span {
+  color: var(--muted);
+}
+
+.cashflow-primary h3 {
+  font-size: 1.8rem;
+}
+
+.cashflow-inflow {
+  border-color: rgba(179, 92, 46, 0.22);
+  background: rgba(234, 210, 191, 0.28);
+}
+
+.cashflow-outflow {
+  border-color: rgba(45, 58, 92, 0.2);
+  background: rgba(220, 227, 240, 0.46);
+}
+
+.cashflow-formula {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
 .attribution-column {
   padding: 18px;
   border-radius: 18px;
@@ -666,6 +713,7 @@ textarea {
 
   .analysis-layout,
   .attribution-layout,
+  .cashflow-layout,
   .target-grid,
   .diagnostic-grid {
     grid-template-columns: 1fr;

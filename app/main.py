@@ -52,6 +52,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
         targets = service.get_target_allocation()
         analysis = service.get_portfolio_analysis()
         weekly_attribution = service.get_weekly_attribution()
+        cashflow_analysis = service.get_cashflow_analysis()
         editing_snapshot = None
         if edit_id is not None:
             editing_snapshot = service.get_snapshot(edit_id)
@@ -65,6 +66,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
                 "targets": targets,
                 "analysis": analysis,
                 "weekly_attribution": weekly_attribution,
+                "cashflow_analysis": cashflow_analysis,
                 "category_labels": CATEGORY_LABELS,
                 "default_rows": list(range(max(1, len(form_values["holdings"])))),
                 "account_type_options": ACCOUNT_TYPE_OPTIONS,

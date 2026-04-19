@@ -285,6 +285,43 @@ class PortfolioService:
             "category_breakdown": category_breakdown,
         }
 
+    def get_cashflow_analysis(self) -> dict:
+        snapshots = self.list_snapshots()
+        if len(snapshots) < 2:
+            return {
+                "available": False,
+                "net_flow": 0.0,
+                "direction": "none",
+                "latest_date": snapshots[0].snapshot_date if snapshots else "",
+                "previous_date": "",
+                "formula_text": "至少需要两期快照才能推算净资金流。",
+            }
+
+        latest = snapshots[0]
+        previous = snapshots[1]
+        net_flow = round(latest.total_assets - previous.total_assets - latest.weekly_return_amount, 2)
+        if net_flow > 0:
+            direction = "inflow"
+            formula_text = f"较上一期推算净流入 {net_flow:.2f}"
+        elif net_flow < 0:
+            direction = "outflow"
+            formula_text = f"较上一期推算净流出 {abs(net_flow):.2f}"
+        else:
+            direction = "flat"
+            formula_text = "较上一期无明显净资金流"
+
+        return {
+            "available": True,
+            "net_flow": net_flow,
+            "direction": direction,
+            "latest_date": latest.snapshot_date,
+            "previous_date": previous.snapshot_date,
+            "latest_total_assets": latest.total_assets,
+            "previous_total_assets": previous.total_assets,
+            "weekly_return_amount": latest.weekly_return_amount,
+            "formula_text": formula_text,
+        }
+
     def _get_holdings_for_snapshot(self, connection, snapshot_id: int) -> list[HoldingRecord]:
         rows = connection.execute(
             "SELECT * FROM holdings WHERE snapshot_id = ? ORDER BY id ASC",

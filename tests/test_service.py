@@ -306,6 +306,49 @@ class PortfolioServiceTests(unittest.TestCase):
         self.assertEqual(attribution["top_detractors"][0]["product_name"], "全球稳健配置组合")
         self.assertEqual(attribution["category_breakdown"]["equity"], 5000)
 
+    def test_cashflow_analysis_derives_net_flow_from_two_snapshots(self) -> None:
+        self.service.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-04-11",
+                total_assets=400000,
+                cash_balance=30000,
+                weekly_return_amount=2000,
+                holdings=[
+                    HoldingInput(
+                        product_name="现金账户",
+                        account_type="货币/现金账户",
+                        amount=30000,
+                        allocation_percent=7.5,
+                        category="cash",
+                    )
+                ],
+            )
+        )
+        self.service.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-04-18",
+                total_assets=419000,
+                cash_balance=35000,
+                weekly_return_amount=7000,
+                holdings=[
+                    HoldingInput(
+                        product_name="现金账户",
+                        account_type="货币/现金账户",
+                        amount=35000,
+                        allocation_percent=8.35,
+                        category="cash",
+                    )
+                ],
+            )
+        )
+
+        cashflow = self.service.get_cashflow_analysis()
+
+        self.assertTrue(cashflow["available"])
+        self.assertEqual(cashflow["net_flow"], 12000)
+        self.assertEqual(cashflow["direction"], "inflow")
+        self.assertIn("净流入 12000.00", cashflow["formula_text"])
+
 
 if __name__ == "__main__":
     unittest.main()

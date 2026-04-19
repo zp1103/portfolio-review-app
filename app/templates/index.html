@@ -211,6 +211,41 @@
           {% endif %}
         </section>
 
+        <section class="card cashflow-card">
+          <div class="section-head section-head-compact">
+            <div>
+              <p class="mini-label">Cash Flow</p>
+              <h2>净资金流</h2>
+            </div>
+          </div>
+          {% if cashflow_analysis.available %}
+            <div class="cashflow-layout">
+              <article class="cashflow-primary cashflow-{{ cashflow_analysis.direction }}">
+                <span>{{ cashflow_analysis.previous_date }} → {{ cashflow_analysis.latest_date }}</span>
+                <h3>
+                  {% if cashflow_analysis.net_flow > 0 %}+{% endif %}{{ '%.2f'|format(cashflow_analysis.net_flow) }}
+                </h3>
+                <p>{{ cashflow_analysis.formula_text }}</p>
+              </article>
+              <div class="cashflow-formula">
+                <p>本周净资金流 = 本周总资产 - 上期总资产 - 本周收益</p>
+                <span>
+                  {{ '%.2f'|format(cashflow_analysis.latest_total_assets) }}
+                  -
+                  {{ '%.2f'|format(cashflow_analysis.previous_total_assets) }}
+                  -
+                  {{ '%.2f'|format(cashflow_analysis.weekly_return_amount) }}
+                </span>
+              </div>
+            </div>
+          {% else %}
+            <div class="empty-history">
+              <p>暂无法推算净资金流。</p>
+              <span>{{ cashflow_analysis.formula_text }}</span>
+            </div>
+          {% endif %}
+        </section>
+
         <section class="card form-card">
           <div class="section-head">
             <div>

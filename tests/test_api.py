@@ -271,6 +271,29 @@ class ApiTests(unittest.TestCase):
         self.client.post(
             "/api/weekly-snapshots",
             json={
+                "snapshot_date": "2026-04-11",
+                "total_assets": 400000,
+                "cash_balance": 30000,
+                "weekly_return_amount": 2000,
+                "ytd_return_amount": 3888,
+                "holdings": [
+                    {
+                        "product_name": "现金账户",
+                        "account_type": "货币/现金账户",
+                        "amount": 30000,
+                        "allocation_percent": 7.5,
+                        "category": "cash",
+                        "action": "hold",
+                        "weekly_pnl_amount": 0,
+                        "valuation_cutoff_date": "2026-04-11",
+                        "notes": "",
+                    }
+                ],
+            },
+        )
+        self.client.post(
+            "/api/weekly-snapshots",
+            json={
                 "snapshot_date": "2026-04-18",
                 "total_assets": 419896.25,
                 "cash_balance": 33931.45,
@@ -322,6 +345,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("目标配置", response.text)
         self.assertIn("当前配置诊断", response.text)
         self.assertIn("本周收益归因", response.text)
+        self.assertIn("净资金流", response.text)
+        self.assertIn("较上一期推算净流入", response.text)
         self.assertIn("固收", response.text)
         self.assertIn("现金", response.text)
 
