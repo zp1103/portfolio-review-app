@@ -203,6 +203,49 @@ class ApiTests(unittest.TestCase):
         self.assertIn('value="2026-04-18"', response.text)
         self.assertIn("普通账户到周五", response.text)
 
+    def test_dashboard_can_copy_existing_snapshot_as_new_draft(self) -> None:
+        create_response = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-04-18",
+                "total_assets": 421000,
+                "cash_balance": 80000,
+                "weekly_return_amount": -3200,
+                "ytd_return_amount": 8600,
+                "data_cutoff_notes": "普通账户到周五",
+                "notes": "上周备注",
+                "holdings": [
+                    {
+                        "product_name": "全球稳健配置组合",
+                        "account_type": "第三方平台账户",
+                        "amount": 100000,
+                        "allocation_percent": 23.75,
+                        "category": "fixed_income",
+                        "action": "hold",
+                        "weekly_pnl_amount": 660,
+                        "valuation_cutoff_date": "2026-04-18",
+                        "exposure_equity_percent": 30,
+                        "exposure_fixed_income_percent": 60,
+                        "exposure_cash_percent": 10,
+                        "notes": "固收60%，权益30%",
+                    }
+                ],
+            },
+        )
+        snapshot_id = create_response.json()["id"]
+
+        response = self.client.get(f"/?copy_id={snapshot_id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("复制 2026-04-18 的快照", response.text)
+        self.assertIn('name="snapshot_id" value=""', response.text)
+        self.assertIn('name="snapshot_date" value=""', response.text)
+        self.assertIn('value="全球稳健配置组合"', response.text)
+        self.assertIn('name="amount_0" value="100000.0"', response.text)
+        self.assertIn('name="weekly_pnl_amount_0" value="0"', response.text)
+        self.assertIn('name="valuation_cutoff_date_0" value=""', response.text)
+        self.assertIn('name="exposure_fixed_income_percent_0" value="60.0"', response.text)
+
     def test_form_submission_updates_existing_snapshot(self) -> None:
         create_response = self.client.post(
             "/api/weekly-snapshots",

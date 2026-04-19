@@ -46,7 +46,11 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/", response_class=HTMLResponse)
-    def dashboard(request: Request, edit_id: int | None = None):
+    def dashboard(
+        request: Request,
+        edit_id: int | None = None,
+        copy_id: int | None = None,
+    ):
         snapshots = service.list_snapshots()
         summary = service.get_allocation_summary()
         targets = service.get_target_allocation()
@@ -55,9 +59,15 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
         weekly_attribution = service.get_weekly_attribution()
         cashflow_analysis = service.get_cashflow_analysis()
         editing_snapshot = None
+        copying_snapshot = None
         if edit_id is not None:
             editing_snapshot = service.get_snapshot(edit_id)
-        form_values = _build_form_values(editing_snapshot)
+        elif copy_id is not None:
+            copying_snapshot = service.get_snapshot(copy_id)
+        form_values = _build_form_values(
+            editing_snapshot or copying_snapshot,
+            copy_as_new=copying_snapshot is not None,
+        )
         return templates.TemplateResponse(
             request=request,
             name="index.html",
@@ -74,6 +84,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
                 "account_type_options": ACCOUNT_TYPE_OPTIONS,
                 "form_values": form_values,
                 "editing_snapshot": editing_snapshot,
+                "copying_snapshot": copying_snapshot,
             },
         )
 
@@ -176,7 +187,7 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
     return holdings
 
 
-def _build_form_values(snapshot) -> dict:
+def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
     if snapshot is None:
         return {
             "snapshot_id": "",
@@ -208,14 +219,14 @@ def _build_form_values(snapshot) -> dict:
         }
 
     return {
-        "snapshot_id": snapshot.id,
-        "snapshot_date": snapshot.snapshot_date,
+        "snapshot_id": "" if copy_as_new else snapshot.id,
+        "snapshot_date": "" if copy_as_new else snapshot.snapshot_date,
         "total_assets": snapshot.total_assets,
         "cash_balance": snapshot.cash_balance,
-        "weekly_return_amount": snapshot.weekly_return_amount,
-        "ytd_return_amount": snapshot.ytd_return_amount,
-        "data_cutoff_notes": snapshot.data_cutoff_notes,
-        "notes": snapshot.notes,
+        "weekly_return_amount": 0 if copy_as_new else snapshot.weekly_return_amount,
+        "ytd_return_amount": 0 if copy_as_new else snapshot.ytd_return_amount,
+        "data_cutoff_notes": "" if copy_as_new else snapshot.data_cutoff_notes,
+        "notes": "" if copy_as_new else snapshot.notes,
         "holdings": [
             {
                 "product_name": holding.product_name,
@@ -224,8 +235,8 @@ def _build_form_values(snapshot) -> dict:
                 "allocation_percent": holding.allocation_percent,
                 "category": holding.category,
                 "action": holding.action,
-                "weekly_pnl_amount": holding.weekly_pnl_amount,
-                "valuation_cutoff_date": holding.valuation_cutoff_date,
+                "weekly_pnl_amount": 0 if copy_as_new else holding.weekly_pnl_amount,
+                "valuation_cutoff_date": "" if copy_as_new else holding.valuation_cutoff_date,
                 "exposure_equity_percent": holding.exposure_equity_percent,
                 "exposure_fixed_income_percent": holding.exposure_fixed_income_percent,
                 "exposure_cash_percent": holding.exposure_cash_percent,

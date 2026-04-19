@@ -298,10 +298,12 @@
           <div class="section-head">
             <div>
               <p class="mini-label">Weekly Input</p>
-              <h2>{% if editing_snapshot %}编辑快照{% else %}每周录入{% endif %}</h2>
+              <h2>{% if editing_snapshot %}编辑快照{% elif copying_snapshot %}复制快照{% else %}每周录入{% endif %}</h2>
               <p>
                 {% if editing_snapshot %}
                   正在编辑 {{ editing_snapshot.snapshot_date }} 的快照。可以继续补充持仓，保存后会覆盖原记录。
+                {% elif copying_snapshot %}
+                  复制 {{ copying_snapshot.snapshot_date }} 的快照。请填写新的快照日期，并更新金额、盈亏和估值截止日。
                 {% else %}
                   先填写本周总览，再补充持仓明细。每条持仓都可以带上本周动作和备注。
                 {% endif %}
@@ -465,6 +467,8 @@
                 <span>
                   {% if editing_snapshot %}
                     继续补录后可以直接在这里保存，覆盖当前快照。
+                  {% elif copying_snapshot %}
+                    复制来的持仓已保留，更新本周数字后可直接保存为新快照。
                   {% else %}
                     录到这里时可以继续补下一条，或直接保存，不用回到顶部。
                   {% endif %}
@@ -494,6 +498,7 @@
                       <span>本周 {{ '%.2f'|format(snapshot.weekly_return_amount) }}</span>
                       <span>年内 {{ '%.2f'|format(snapshot.ytd_return_amount) }}</span>
                       <a href="/?edit_id={{ snapshot.id }}" class="inline-link">编辑</a>
+                      <a href="/?copy_id={{ snapshot.id }}" class="inline-link">复制为新快照</a>
                     </div>
                   </header>
                   <ul>
