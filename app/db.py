@@ -123,3 +123,10 @@ class Database:
                 ) VALUES (1, 48, 55, 35, 42, 5, 10, 0, 5)
                 """
             )
+
+    def has_snapshots(self) -> bool:
+        with self.session() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) as count FROM weekly_snapshots"
+            ).fetchone()
+            return int(row["count"]) > 0

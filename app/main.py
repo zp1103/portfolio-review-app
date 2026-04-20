@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.db import Database
+from app.demo_seeder import seed_demo_data_if_needed
 from app.schemas import HoldingInput, SnapshotCreateInput
 from app.service import PortfolioService
 
@@ -35,6 +36,7 @@ CATEGORY_LABELS = {
 def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
     database = Database(db_path)
     database.initialize()
+    seed_demo_data_if_needed(database)
     service = PortfolioService(database)
     templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
