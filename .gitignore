@@ -1,12 +1,15 @@
 .venv/
+
 __pycache__/
 *.py[cod]
 
 .pytest_cache/
 .tmp_pytest/
 
+.env
 data/
 *.db
+*.sqlite
 *.sqlite3
 
 .DS_Store
