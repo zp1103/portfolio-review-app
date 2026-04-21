@@ -459,3 +459,68 @@ class PortfolioService:
                 for category, percent in exposures.items()
             }
         return exposures
+
+    def get_data_quality_checks(self) -> dict:
+        snapshots = self.list_snapshots()
+        if not snapshots:
+            return {
+                "available": False,
+                "issues": [],
+            }
+
+        latest = snapshots[0]
+        issues = []
+
+        holdings_total = round(sum(h.amount for h in latest.holdings), 2)
+        if abs(latest.total_assets - holdings_total) > 0.01:
+            issues.append({
+                "type": "total_assets_mismatch",
+                "severity": "warning",
+                "message": "总资产与持仓金额合计不一致",
+                "details": {
+                    "snapshot_total": latest.total_assets,
+                    "holdings_sum": holdings_total,
+                    "difference": round(latest.total_assets - holdings_total, 2),
+                },
+            })
+
+        cash_holdings_total = round(
+            sum(h.amount for h in latest.holdings if h.category == "cash"), 2
+        )
+        if abs(latest.cash_balance - cash_holdings_total) > 0.01:
+            issues.append({
+                "type": "cash_balance_mismatch",
+                "severity": "warning",
+                "message": "现金余额与现金类持仓金额不一致",
+                "details": {
+                    "snapshot_cash": latest.cash_balance,
+                    "cash_holdings_sum": cash_holdings_total,
+                    "difference": round(latest.cash_balance - cash_holdings_total, 2),
+                },
+            })
+
+        for holding in latest.holdings:
+            exposure_total = (
+                holding.exposure_equity_percent
+                + holding.exposure_fixed_income_percent
+                + holding.exposure_cash_percent
+                + holding.exposure_gold_percent
+                + holding.exposure_other_percent
+            )
+
+            if exposure_total > 0 and abs(exposure_total - 100) > 0.01:
+                issues.append({
+                    "type": "exposure_sum_invalid",
+                    "severity": "warning",
+                    "message": f"持仓 '{holding.product_name}' 的穿透比例合计异常",
+                    "details": {
+                        "product_name": holding.product_name,
+                        "exposure_sum": round(exposure_total, 2),
+                        "expected": 100,
+                    },
+                })
+
+        return {
+            "available": True,
+            "issues": issues,
+        }

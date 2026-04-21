@@ -60,6 +60,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
         lookthrough_analysis = service.get_lookthrough_analysis()
         weekly_attribution = service.get_weekly_attribution()
         cashflow_analysis = service.get_cashflow_analysis()
+        data_quality = service.get_data_quality_checks()
         editing_snapshot = None
         copying_snapshot = None
         if edit_id is not None:
@@ -81,6 +82,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
                 "lookthrough_analysis": lookthrough_analysis,
                 "weekly_attribution": weekly_attribution,
                 "cashflow_analysis": cashflow_analysis,
+                "data_quality": data_quality,
                 "category_labels": CATEGORY_LABELS,
                 "default_rows": list(range(max(1, len(form_values["holdings"])))),
                 "account_type_options": ACCOUNT_TYPE_OPTIONS,

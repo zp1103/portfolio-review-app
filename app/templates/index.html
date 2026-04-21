@@ -52,6 +52,49 @@
           </aside>
         </section>
 
+        {% if data_quality.available and data_quality.issues %}
+        <section class="card data-quality-card">
+          <div class="section-head section-head-compact">
+            <div>
+              <p class="mini-label">Data Quality</p>
+              <h2>数据质量提示</h2>
+            </div>
+            <span class="data-quality-badge">发现 {{ data_quality.issues|length }} 个问题</span>
+          </div>
+          <div class="data-quality-issues">
+            {% for issue in data_quality.issues %}
+            <article class="data-quality-issue">
+              <div class="data-quality-icon">
+                {% if issue.type == 'total_assets_mismatch' %}
+                  <span>📊</span>
+                {% elif issue.type == 'cash_balance_mismatch' %}
+                  <span>💵</span>
+                {% elif issue.type == 'exposure_sum_invalid' %}
+                  <span>🔍</span>
+                {% else %}
+                  <span>⚠️</span>
+                {% endif %}
+              </div>
+              <div class="data-quality-content">
+                <h3>{{ issue.message }}</h3>
+                {% if issue.type == 'total_assets_mismatch' %}
+                <p>快照记录总资产：<strong>{{ '%.2f'|format(issue.details.snapshot_total) }}</strong>，持仓金额合计：<strong>{{ '%.2f'|format(issue.details.holdings_sum) }}</strong></p>
+                <p class="data-quality-detail">差额：{% if issue.details.difference > 0 %}+{% endif %}{{ '%.2f'|format(issue.details.difference) }}</p>
+                {% elif issue.type == 'cash_balance_mismatch' %}
+                <p>快照记录现金余额：<strong>{{ '%.2f'|format(issue.details.snapshot_cash) }}</strong>，现金类持仓合计：<strong>{{ '%.2f'|format(issue.details.cash_holdings_sum) }}</strong></p>
+                <p class="data-quality-detail">差额：{% if issue.details.difference > 0 %}+{% endif %}{{ '%.2f'|format(issue.details.difference) }}</p>
+                {% elif issue.type == 'exposure_sum_invalid' %}
+                <p>持仓：<strong>{{ issue.details.product_name }}</strong></p>
+                <p class="data-quality-detail">穿透比例合计：<strong>{{ '%.2f'|format(issue.details.exposure_sum) }}%</strong>（应为 {{ issue.details.expected }}%）</p>
+                {% endif %}
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          <p class="data-quality-note">提示：数据质量问题不影响保存，但建议检查以确保分析结果准确。</p>
+        </section>
+        {% endif %}
+
         <section class="analysis-layout">
           <section class="card target-card">
             <div class="section-head section-head-compact">
