@@ -19,11 +19,51 @@ pip install -e .[dev]
 uvicorn app.main:app --reload
 ```
 
+如需在首次运行时自动生成演示数据：
+
+```bash
+$env:SEED_DEMO_DATA="true"
+uvicorn app.main:app --reload
+```
+
 ## Docker Compose 运行
 
 ```bash
 docker compose up --build
 ```
+
+如需启用演示数据初始化，在 `.env` 中设置：
+
+```env
+SEED_DEMO_DATA=true
+```
+
+然后启动：
+
+```bash
+docker compose up --build
+```
+
+## 演示数据初始化
+
+应用支持通过环境变量 `SEED_DEMO_DATA=true` 自动生成演示数据。
+
+**特性：**
+- 仅当数据库中**没有**周快照时才会生成
+- 生成最近约 20 周的伪造持仓快照
+- 覆盖以下资产类别：
+  - 权益 (equity)：中证全指、科创50、创业板指数等
+  - 固收 (fixed_income)：全球稳健配置组合、纯债基金等
+  - 现金 (cash)：现金账户
+  - 黄金 (gold)：黄金ETF
+- 已有快照时**不会**重复生成，保护真实数据
+
+**使用场景：**
+- 初次体验系统功能
+- 演示配置分析功能
+- 开发测试
+
+**注意：** 一旦数据库中存在真实数据，即使设置 `SEED_DEMO_DATA=true` 也不会生成演示数据。
 
 ## 服务器部署
 
@@ -51,6 +91,7 @@ TZ=Asia/Shanghai
 IMAGE_NAME=portfolio-review-app:latest
 PIP_INDEX_URL=
 PIP_EXTRA_INDEX_URL=
+SEED_DEMO_DATA=false
 ```
 
 说明：
@@ -61,6 +102,7 @@ PIP_EXTRA_INDEX_URL=
 - `IMAGE_NAME`：构建后的镜像名称
 - `PIP_INDEX_URL`：可选的 Python 包镜像源
 - `PIP_EXTRA_INDEX_URL`：可选的额外 Python 包索引
+- `SEED_DEMO_DATA`：是否启用演示数据初始化（仅在空库时生效）
 
 如果你希望数据库落在固定目录，例如 `/opt/portfolio-review/data`，可以改成：
 
