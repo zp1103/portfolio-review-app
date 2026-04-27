@@ -177,6 +177,7 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
                 category=str(form.get(f"category_{index}", "other")),
                 action=str(form.get(f"action_{index}", "hold")),
                 weekly_pnl_amount=float(form.get(f"weekly_pnl_amount_{index}", 0) or 0),
+                cumulative_pnl_amount=float(form.get(f"cumulative_pnl_amount_{index}", 0) or 0),
                 valuation_cutoff_date=str(form.get(f"valuation_cutoff_date_{index}", "")),
                 exposure_equity_percent=float(form.get(f"exposure_equity_percent_{index}", 0) or 0),
                 exposure_fixed_income_percent=float(
@@ -211,6 +212,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                     "category": "equity",
                     "action": "hold",
                     "weekly_pnl_amount": 0,
+                    "cumulative_pnl_amount": 0,
                     "valuation_cutoff_date": "",
                     "exposure_equity_percent": "",
                     "exposure_fixed_income_percent": "",
@@ -240,6 +242,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                 "category": holding.category,
                 "action": holding.action,
                 "weekly_pnl_amount": 0 if copy_as_new else holding.weekly_pnl_amount,
+                "cumulative_pnl_amount": holding.cumulative_pnl_amount,
                 "valuation_cutoff_date": "" if copy_as_new else holding.valuation_cutoff_date,
                 "exposure_equity_percent": holding.exposure_equity_percent,
                 "exposure_fixed_income_percent": holding.exposure_fixed_income_percent,

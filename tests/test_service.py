@@ -40,6 +40,7 @@ class PortfolioServiceTests(unittest.TestCase):
                         category="equity",
                         action="hold",
                         weekly_pnl_amount=1200,
+                        cumulative_pnl_amount=5400,
                         valuation_cutoff_date="2026-04-18",
                         notes="维持核心仓",
                     ),
@@ -62,6 +63,7 @@ class PortfolioServiceTests(unittest.TestCase):
         self.assertEqual(created.snapshot_date, "2026-04-18")
         self.assertEqual(len(created.holdings), 2)
         self.assertEqual(created.holdings[0].weekly_pnl_amount, 1200)
+        self.assertEqual(created.holdings[0].cumulative_pnl_amount, 5400)
         self.assertEqual(created.holdings[0].valuation_cutoff_date, "2026-04-18")
 
         snapshots = self.service.list_snapshots()

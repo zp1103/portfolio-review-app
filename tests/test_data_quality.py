@@ -208,6 +208,50 @@ class DataQualityServiceTests(unittest.TestCase):
         self.assertEqual(exposure_issues[0]["details"]["exposure_sum"], 90)
         self.assertEqual(exposure_issues[0]["details"]["expected"], 100)
 
+    def test_quality_checks_detects_invalid_implied_cost(self) -> None:
+        self.service.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-04-18",
+                total_assets=300000,
+                cash_balance=50000,
+                weekly_return_amount=1200,
+                ytd_return_amount=6400,
+                holdings=[
+                    HoldingInput(
+                        product_name="科创50",
+                        account_type="普通账户",
+                        amount=50000,
+                        allocation_percent=16.67,
+                        category="equity",
+                        cumulative_pnl_amount=52000,
+                    ),
+                    HoldingInput(
+                        product_name="全球稳健组合",
+                        account_type="普通账户",
+                        amount=200000,
+                        allocation_percent=66.67,
+                        category="fixed_income",
+                    ),
+                    HoldingInput(
+                        product_name="现金账户",
+                        account_type="货币/现金账户",
+                        amount=50000,
+                        allocation_percent=16.67,
+                        category="cash",
+                    ),
+                ],
+            )
+        )
+
+        checks = self.service.get_data_quality_checks()
+
+        self.assertTrue(checks["available"])
+        implied_cost_issues = [i for i in checks["issues"] if i["type"] == "implied_cost_invalid"]
+        self.assertEqual(len(implied_cost_issues), 1)
+        self.assertIn("推导成本异常", implied_cost_issues[0]["message"])
+        self.assertEqual(implied_cost_issues[0]["details"]["product_name"], "科创50")
+        self.assertEqual(implied_cost_issues[0]["details"]["implied_cost"], -2000)
+
     def test_quality_checks_ignores_zero_exposure_sum(self) -> None:
         self.service.create_snapshot(
             SnapshotCreateInput(

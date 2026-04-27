@@ -391,6 +391,7 @@ class PortfolioService:
                 category,
                 action,
                 weekly_pnl_amount,
+                cumulative_pnl_amount,
                 valuation_cutoff_date,
                 exposure_equity_percent,
                 exposure_fixed_income_percent,
@@ -398,7 +399,7 @@ class PortfolioService:
                 exposure_gold_percent,
                 exposure_other_percent,
                 notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
@@ -409,6 +410,7 @@ class PortfolioService:
                 holding.category,
                 holding.action,
                 holding.weekly_pnl_amount,
+                holding.cumulative_pnl_amount,
                 holding.valuation_cutoff_date,
                 holding.exposure_equity_percent,
                 holding.exposure_fixed_income_percent,
@@ -424,6 +426,7 @@ class PortfolioService:
             "product_name": holding.product_name,
             "amount": holding.amount,
             "weekly_pnl_amount": holding.weekly_pnl_amount,
+            "cumulative_pnl_amount": holding.cumulative_pnl_amount,
             "category": holding.category,
             "label": CATEGORY_LABELS.get(holding.category, holding.category),
         }
@@ -517,6 +520,20 @@ class PortfolioService:
                         "product_name": holding.product_name,
                         "exposure_sum": round(exposure_total, 2),
                         "expected": 100,
+                    },
+                })
+
+            implied_cost = round(holding.amount - holding.cumulative_pnl_amount, 2)
+            if implied_cost <= 0:
+                issues.append({
+                    "type": "implied_cost_invalid",
+                    "severity": "warning",
+                    "message": f"持仓 '{holding.product_name}' 的推导成本异常",
+                    "details": {
+                        "product_name": holding.product_name,
+                        "amount": holding.amount,
+                        "cumulative_pnl_amount": holding.cumulative_pnl_amount,
+                        "implied_cost": implied_cost,
                     },
                 })
 

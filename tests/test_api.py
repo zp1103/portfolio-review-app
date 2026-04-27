@@ -40,6 +40,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="weekly-return-rate-input"', response.text)
         self.assertIn('id="total-assets-input"', response.text)
         self.assertIn('id="cash-balance-input"', response.text)
+        self.assertIn('name="cumulative_pnl_amount_0"', response.text)
         self.assertIn('name="exposure_equity_percent_0"', response.text)
         self.assertIn("底层穿透比例", response.text)
 
@@ -61,6 +62,7 @@ class ApiTests(unittest.TestCase):
                     "category": "equity",
                     "action": "hold",
                     "weekly_pnl_amount": 1200,
+                    "cumulative_pnl_amount": 8200,
                     "valuation_cutoff_date": "2026-04-18",
                     "notes": "维持核心仓",
                 }
@@ -73,6 +75,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(create_response.status_code, 201)
         self.assertEqual(create_response.json()["snapshot_date"], "2026-04-18")
         self.assertEqual(create_response.json()["holdings"][0]["weekly_pnl_amount"], 1200)
+        self.assertEqual(create_response.json()["holdings"][0]["cumulative_pnl_amount"], 8200)
         self.assertEqual(create_response.json()["holdings"][0]["valuation_cutoff_date"], "2026-04-18")
         self.assertEqual(list_response.status_code, 200)
         data = list_response.json()
@@ -223,6 +226,7 @@ class ApiTests(unittest.TestCase):
                         "category": "fixed_income",
                         "action": "hold",
                         "weekly_pnl_amount": 660,
+                        "cumulative_pnl_amount": 11800,
                         "valuation_cutoff_date": "2026-04-18",
                         "exposure_equity_percent": 30,
                         "exposure_fixed_income_percent": 60,
@@ -243,6 +247,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('value="全球稳健配置组合"', response.text)
         self.assertIn('name="amount_0" value="100000.0"', response.text)
         self.assertIn('name="weekly_pnl_amount_0" value="0"', response.text)
+        self.assertIn('name="cumulative_pnl_amount_0" value="11800.0"', response.text)
         self.assertIn('name="valuation_cutoff_date_0" value=""', response.text)
         self.assertIn('name="exposure_fixed_income_percent_0" value="60.0"', response.text)
 
