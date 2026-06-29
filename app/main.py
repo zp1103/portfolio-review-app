@@ -180,13 +180,17 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
         cumulative_pnl_amount = _parse_float(form.get(f"cumulative_pnl_amount_{index}", 0))
         if previous_cumulative_pnl is not None:
             cumulative_pnl_amount = round(previous_cumulative_pnl + weekly_pnl_amount, 2)
+        category = str(form.get(f"category_{index}", "other"))
+        if category == "cash":
+            weekly_pnl_amount = 0
+            cumulative_pnl_amount = 0
         holdings.append(
             HoldingInput(
                 product_name=product_name,
                 account_type=str(form.get(f"account_type_{index}", "")).strip() or "普通账户",
                 amount=amount,
                 allocation_percent=_parse_float(form.get(f"allocation_percent_{index}", 0)),
-                category=str(form.get(f"category_{index}", "other")),
+                category=category,
                 action=str(form.get(f"action_{index}", "hold")),
                 transaction_amount=transaction_amount,
                 weekly_pnl_amount=weekly_pnl_amount,

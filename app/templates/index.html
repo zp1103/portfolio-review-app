@@ -808,7 +808,14 @@
           const weeklyPnlInput = row.querySelector(".holding-weekly-pnl-input");
           const previousCumulativePnlInput = row.querySelector(".previous-cumulative-pnl-input");
           const cumulativePnlInput = row.querySelector(".holding-cumulative-pnl-input");
+          const categorySelect = row.querySelector('select[name^="category_"]');
           if (!amountInput || !previousAmountInput || previousAmountInput.value === "" || !weeklyPnlInput) return;
+
+          if (categorySelect?.value === "cash") {
+            weeklyPnlInput.value = "0.00";
+            if (cumulativePnlInput) cumulativePnlInput.value = "0.00";
+            return;
+          }
 
           const amount = Number(amountInput.value || 0);
           const previousAmount = Number(previousAmountInput.value || 0);

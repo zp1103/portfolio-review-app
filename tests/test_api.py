@@ -290,6 +290,38 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(holding["cumulative_pnl_amount"], 15000)
         self.assertEqual(holding["transaction_amount"], 5000)
 
+    def test_form_submission_keeps_cash_pnl_zero_when_cash_balance_changes(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-06-29",
+                "product_name_0": "现金账户",
+                "account_type_0": "普通账户",
+                "amount_0": "43191.46",
+                "previous_amount_0": "43317.15",
+                "previous_cumulative_pnl_amount_0": "0",
+                "transaction_amount_0": "0",
+                "allocation_percent_0": "0",
+                "category_0": "cash",
+                "action_0": "hold",
+                "weekly_pnl_amount_0": "",
+                "cumulative_pnl_amount_0": "",
+                "valuation_cutoff_date_0": "2026-06-29",
+                "holding_notes_0": "",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        snapshots = self.client.get("/api/weekly-snapshots").json()
+        holding = snapshots[0]["holdings"][0]
+        self.assertEqual(snapshots[0]["weekly_return_amount"], 0)
+        self.assertEqual(snapshots[0]["cash_balance"], 43191.46)
+        self.assertEqual(holding["weekly_pnl_amount"], 0)
+        self.assertEqual(holding["cumulative_pnl_amount"], 0)
+        self.assertEqual(holding["transaction_amount"], 0)
+
     def test_form_submission_updates_existing_snapshot(self) -> None:
         create_response = self.client.post(
             "/api/weekly-snapshots",
