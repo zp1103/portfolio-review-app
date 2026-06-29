@@ -40,6 +40,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn('id="weekly-return-rate-input"', response.text)
         self.assertIn('id="total-assets-input"', response.text)
         self.assertIn('id="cash-balance-input"', response.text)
+        self.assertIn('name="transaction_amount_0"', response.text)
         self.assertIn('name="cumulative_pnl_amount_0"', response.text)
         self.assertIn('name="exposure_equity_percent_0"', response.text)
         self.assertIn("底层穿透比例", response.text)
@@ -62,6 +63,7 @@ class ApiTests(unittest.TestCase):
                     "category": "equity",
                     "action": "hold",
                     "weekly_pnl_amount": 1200,
+                    "transaction_amount": 5000,
                     "cumulative_pnl_amount": 8200,
                     "valuation_cutoff_date": "2026-04-18",
                     "notes": "维持核心仓",
@@ -75,6 +77,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(create_response.status_code, 201)
         self.assertEqual(create_response.json()["snapshot_date"], "2026-04-18")
         self.assertEqual(create_response.json()["holdings"][0]["weekly_pnl_amount"], 1200)
+        self.assertEqual(create_response.json()["holdings"][0]["transaction_amount"], 5000)
         self.assertEqual(create_response.json()["holdings"][0]["cumulative_pnl_amount"], 8200)
         self.assertEqual(create_response.json()["holdings"][0]["valuation_cutoff_date"], "2026-04-18")
         self.assertEqual(list_response.status_code, 200)
@@ -246,10 +249,46 @@ class ApiTests(unittest.TestCase):
         self.assertIn('name="snapshot_date" value=""', response.text)
         self.assertIn('value="全球稳健配置组合"', response.text)
         self.assertIn('name="amount_0" value="100000.0"', response.text)
+        self.assertIn('name="previous_amount_0" value="100000.0"', response.text)
+        self.assertIn('name="previous_cumulative_pnl_amount_0" value="11800.0"', response.text)
+        self.assertIn('name="transaction_amount_0" value="0"', response.text)
         self.assertIn('name="weekly_pnl_amount_0" value="0"', response.text)
         self.assertIn('name="cumulative_pnl_amount_0" value="11800.0"', response.text)
         self.assertIn('name="valuation_cutoff_date_0" value=""', response.text)
         self.assertIn('name="exposure_fixed_income_percent_0" value="60.0"', response.text)
+
+    def test_form_submission_derives_pnl_from_previous_snapshot_and_transaction(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-06-29",
+                "ytd_return_amount": "0",
+                "product_name_0": "科创50",
+                "account_type_0": "普通账户",
+                "amount_0": "112000",
+                "previous_amount_0": "100000",
+                "previous_cumulative_pnl_amount_0": "8000",
+                "transaction_amount_0": "5000",
+                "allocation_percent_0": "0",
+                "category_0": "equity",
+                "action_0": "buy",
+                "weekly_pnl_amount_0": "",
+                "cumulative_pnl_amount_0": "",
+                "valuation_cutoff_date_0": "2026-06-27",
+                "holding_notes_0": "本周追加后自动推导盈亏",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        snapshots = self.client.get("/api/weekly-snapshots").json()
+        holding = snapshots[0]["holdings"][0]
+        self.assertEqual(snapshots[0]["weekly_return_amount"], 7000)
+        self.assertEqual(snapshots[0]["ytd_return_amount"], 15000)
+        self.assertEqual(holding["weekly_pnl_amount"], 7000)
+        self.assertEqual(holding["cumulative_pnl_amount"], 15000)
+        self.assertEqual(holding["transaction_amount"], 5000)
 
     def test_form_submission_updates_existing_snapshot(self) -> None:
         create_response = self.client.post(

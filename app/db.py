@@ -50,6 +50,7 @@ class Database:
                     allocation_percent REAL NOT NULL,
                     category TEXT NOT NULL,
                     action TEXT NOT NULL DEFAULT 'hold',
+                    transaction_amount REAL NOT NULL DEFAULT 0,
                     weekly_pnl_amount REAL NOT NULL DEFAULT 0,
                     cumulative_pnl_amount REAL NOT NULL DEFAULT 0,
                     valuation_cutoff_date TEXT NOT NULL DEFAULT '',
@@ -92,6 +93,10 @@ class Database:
             if "weekly_pnl_amount" not in columns:
                 connection.execute(
                     "ALTER TABLE holdings ADD COLUMN weekly_pnl_amount REAL NOT NULL DEFAULT 0"
+                )
+            if "transaction_amount" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN transaction_amount REAL NOT NULL DEFAULT 0"
                 )
             if "cumulative_pnl_amount" not in columns:
                 connection.execute(

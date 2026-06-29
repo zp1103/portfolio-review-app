@@ -390,6 +390,7 @@ class PortfolioService:
                 allocation_percent,
                 category,
                 action,
+                transaction_amount,
                 weekly_pnl_amount,
                 cumulative_pnl_amount,
                 valuation_cutoff_date,
@@ -399,7 +400,7 @@ class PortfolioService:
                 exposure_gold_percent,
                 exposure_other_percent,
                 notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
@@ -409,6 +410,7 @@ class PortfolioService:
                 holding.allocation_percent,
                 holding.category,
                 holding.action,
+                holding.transaction_amount,
                 holding.weekly_pnl_amount,
                 holding.cumulative_pnl_amount,
                 holding.valuation_cutoff_date,
@@ -426,6 +428,7 @@ class PortfolioService:
             "product_name": holding.product_name,
             "amount": holding.amount,
             "weekly_pnl_amount": holding.weekly_pnl_amount,
+            "transaction_amount": holding.transaction_amount,
             "cumulative_pnl_amount": holding.cumulative_pnl_amount,
             "category": holding.category,
             "label": CATEGORY_LABELS.get(holding.category, holding.category),
