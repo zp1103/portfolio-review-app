@@ -110,7 +110,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
             total_assets=_sum_total_assets(holdings),
             cash_balance=_sum_cash_balance(holdings),
             weekly_return_amount=_sum_weekly_pnl(holdings),
-            ytd_return_amount=float(form.get("ytd_return_amount", 0) or 0),
+            ytd_return_amount=_sum_cumulative_pnl(holdings),
             data_cutoff_notes=str(form.get("data_cutoff_notes", "")),
             notes=str(form.get("notes", "")),
             holdings=holdings,
@@ -168,27 +168,53 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
         product_name = str(form.get(f"product_name_{index}", "")).strip()
         if not product_name:
             continue
+        amount = _parse_float(form.get(f"amount_{index}", 0))
+        transaction_amount = _parse_float(form.get(f"transaction_amount_{index}", 0))
+        previous_amount = _parse_optional_float(form.get(f"previous_amount_{index}", ""))
+        previous_cumulative_pnl = _parse_optional_float(
+            form.get(f"previous_cumulative_pnl_amount_{index}", "")
+        )
+        weekly_pnl_amount = _parse_float(form.get(f"weekly_pnl_amount_{index}", 0))
+        if previous_amount is not None:
+            weekly_pnl_amount = round(amount - previous_amount - transaction_amount, 2)
+        cumulative_pnl_amount = _parse_float(form.get(f"cumulative_pnl_amount_{index}", 0))
+        if previous_cumulative_pnl is not None:
+            cumulative_pnl_amount = round(previous_cumulative_pnl + weekly_pnl_amount, 2)
         holdings.append(
             HoldingInput(
                 product_name=product_name,
                 account_type=str(form.get(f"account_type_{index}", "")).strip() or "普通账户",
-                amount=float(form.get(f"amount_{index}", 0) or 0),
-                allocation_percent=float(form.get(f"allocation_percent_{index}", 0) or 0),
+                amount=amount,
+                allocation_percent=_parse_float(form.get(f"allocation_percent_{index}", 0)),
                 category=str(form.get(f"category_{index}", "other")),
                 action=str(form.get(f"action_{index}", "hold")),
-                weekly_pnl_amount=float(form.get(f"weekly_pnl_amount_{index}", 0) or 0),
+                transaction_amount=transaction_amount,
+                weekly_pnl_amount=weekly_pnl_amount,
+                cumulative_pnl_amount=cumulative_pnl_amount,
                 valuation_cutoff_date=str(form.get(f"valuation_cutoff_date_{index}", "")),
-                exposure_equity_percent=float(form.get(f"exposure_equity_percent_{index}", 0) or 0),
-                exposure_fixed_income_percent=float(
-                    form.get(f"exposure_fixed_income_percent_{index}", 0) or 0
+                exposure_equity_percent=_parse_float(
+                    form.get(f"exposure_equity_percent_{index}", 0)
                 ),
-                exposure_cash_percent=float(form.get(f"exposure_cash_percent_{index}", 0) or 0),
-                exposure_gold_percent=float(form.get(f"exposure_gold_percent_{index}", 0) or 0),
-                exposure_other_percent=float(form.get(f"exposure_other_percent_{index}", 0) or 0),
+                exposure_fixed_income_percent=_parse_float(
+                    form.get(f"exposure_fixed_income_percent_{index}", 0)
+                ),
+                exposure_cash_percent=_parse_float(form.get(f"exposure_cash_percent_{index}", 0)),
+                exposure_gold_percent=_parse_float(form.get(f"exposure_gold_percent_{index}", 0)),
+                exposure_other_percent=_parse_float(form.get(f"exposure_other_percent_{index}", 0)),
                 notes=str(form.get(f"holding_notes_{index}", "")),
             )
         )
     return holdings
+
+
+def _parse_float(value) -> float:
+    return float(value or 0)
+
+
+def _parse_optional_float(value) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value)
 
 
 def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
@@ -210,7 +236,11 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                     "allocation_percent": "",
                     "category": "equity",
                     "action": "hold",
+                    "transaction_amount": 0,
                     "weekly_pnl_amount": 0,
+                    "cumulative_pnl_amount": 0,
+                    "previous_amount": "",
+                    "previous_cumulative_pnl_amount": "",
                     "valuation_cutoff_date": "",
                     "exposure_equity_percent": "",
                     "exposure_fixed_income_percent": "",
@@ -239,7 +269,11 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                 "allocation_percent": holding.allocation_percent,
                 "category": holding.category,
                 "action": holding.action,
+                "transaction_amount": 0 if copy_as_new else holding.transaction_amount,
                 "weekly_pnl_amount": 0 if copy_as_new else holding.weekly_pnl_amount,
+                "cumulative_pnl_amount": holding.cumulative_pnl_amount,
+                "previous_amount": holding.amount if copy_as_new else "",
+                "previous_cumulative_pnl_amount": holding.cumulative_pnl_amount if copy_as_new else "",
                 "valuation_cutoff_date": "" if copy_as_new else holding.valuation_cutoff_date,
                 "exposure_equity_percent": holding.exposure_equity_percent,
                 "exposure_fixed_income_percent": holding.exposure_fixed_income_percent,
@@ -255,6 +289,10 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
 
 def _sum_weekly_pnl(holdings: list[HoldingInput]) -> float:
     return round(sum(holding.weekly_pnl_amount for holding in holdings), 2)
+
+
+def _sum_cumulative_pnl(holdings: list[HoldingInput]) -> float:
+    return round(sum(holding.cumulative_pnl_amount for holding in holdings), 2)
 
 
 def _sum_total_assets(holdings: list[HoldingInput]) -> float:

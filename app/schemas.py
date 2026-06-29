@@ -17,7 +17,9 @@ class HoldingInput(BaseModel):
     allocation_percent: float = Field(ge=0, le=100)
     category: Category
     action: Action = "hold"
+    transaction_amount: float = 0
     weekly_pnl_amount: float = 0
+    cumulative_pnl_amount: float = 0
     valuation_cutoff_date: str = ""
     exposure_equity_percent: float = Field(default=0, ge=0, le=100)
     exposure_fixed_income_percent: float = Field(default=0, ge=0, le=100)
@@ -94,7 +96,9 @@ def holding_from_row(row: Mapping[str, object]) -> HoldingRecord:
         allocation_percent=float(row["allocation_percent"]),
         category=str(row["category"]),
         action=str(row["action"]),
+        transaction_amount=float(row["transaction_amount"] or 0),
         weekly_pnl_amount=float(row["weekly_pnl_amount"] or 0),
+        cumulative_pnl_amount=float(row["cumulative_pnl_amount"] or 0),
         valuation_cutoff_date=str(row["valuation_cutoff_date"] or ""),
         exposure_equity_percent=float(row["exposure_equity_percent"] or 0),
         exposure_fixed_income_percent=float(row["exposure_fixed_income_percent"] or 0),
