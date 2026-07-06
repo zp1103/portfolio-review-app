@@ -184,6 +184,11 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
         if category == "cash":
             weekly_pnl_amount = 0
             cumulative_pnl_amount = 0
+        holding_return_rate_percent = _parse_float(
+            form.get(f"holding_return_rate_percent_{index}", 0)
+        )
+        if category == "cash":
+            holding_return_rate_percent = 0
         holdings.append(
             HoldingInput(
                 product_name=product_name,
@@ -195,6 +200,7 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
                 transaction_amount=transaction_amount,
                 weekly_pnl_amount=weekly_pnl_amount,
                 cumulative_pnl_amount=cumulative_pnl_amount,
+                holding_return_rate_percent=holding_return_rate_percent,
                 valuation_cutoff_date=str(form.get(f"valuation_cutoff_date_{index}", "")),
                 exposure_equity_percent=_parse_float(
                     form.get(f"exposure_equity_percent_{index}", 0)
@@ -243,6 +249,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                     "transaction_amount": 0,
                     "weekly_pnl_amount": 0,
                     "cumulative_pnl_amount": 0,
+                    "holding_return_rate_percent": "",
                     "previous_amount": "",
                     "previous_cumulative_pnl_amount": "",
                     "valuation_cutoff_date": "",
@@ -276,6 +283,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                 "transaction_amount": 0 if copy_as_new else holding.transaction_amount,
                 "weekly_pnl_amount": 0 if copy_as_new else holding.weekly_pnl_amount,
                 "cumulative_pnl_amount": holding.cumulative_pnl_amount,
+                "holding_return_rate_percent": "" if copy_as_new else holding.holding_return_rate_percent,
                 "previous_amount": holding.amount if copy_as_new else "",
                 "previous_cumulative_pnl_amount": holding.cumulative_pnl_amount if copy_as_new else "",
                 "valuation_cutoff_date": "" if copy_as_new else holding.valuation_cutoff_date,

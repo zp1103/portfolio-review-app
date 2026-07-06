@@ -322,6 +322,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(holding["cumulative_pnl_amount"], 0)
         self.assertEqual(holding["transaction_amount"], 0)
 
+    def test_form_submission_keeps_holding_return_rate_separate_from_strategy_pnl(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-07-03",
+                "product_name_0": "易方达上证科创50联接A",
+                "account_type_0": "普通账户",
+                "amount_0": "50999.71",
+                "previous_amount_0": "54685.02",
+                "previous_cumulative_pnl_amount_0": "20296.67",
+                "transaction_amount_0": "-2509.84",
+                "allocation_percent_0": "0",
+                "category_0": "equity",
+                "action_0": "hold",
+                "weekly_pnl_amount_0": "",
+                "cumulative_pnl_amount_0": "",
+                "holding_return_rate_percent_0": "49.94",
+                "valuation_cutoff_date_0": "2026-07-03",
+                "holding_notes_0": "",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        snapshots = self.client.get("/api/weekly-snapshots").json()
+        holding = snapshots[0]["holdings"][0]
+        self.assertEqual(holding["weekly_pnl_amount"], -1175.47)
+        self.assertAlmostEqual(holding["cumulative_pnl_amount"], 19121.20, places=2)
+        self.assertEqual(holding["holding_return_rate_percent"], 49.94)
+
     def test_form_submission_updates_existing_snapshot(self) -> None:
         create_response = self.client.post(
             "/api/weekly-snapshots",
