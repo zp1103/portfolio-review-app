@@ -174,6 +174,9 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
         previous_cumulative_pnl = _parse_optional_float(
             form.get(f"previous_cumulative_pnl_amount_{index}", "")
         )
+        previous_holding_cost = _parse_optional_float(
+            form.get(f"previous_holding_cost_amount_{index}", "")
+        )
         weekly_pnl_amount = _parse_float(form.get(f"weekly_pnl_amount_{index}", 0))
         if previous_amount is not None:
             weekly_pnl_amount = round(amount - previous_amount - transaction_amount, 2)
@@ -184,11 +187,21 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
         if category == "cash":
             weekly_pnl_amount = 0
             cumulative_pnl_amount = 0
-        holding_return_rate_percent = _parse_float(
-            form.get(f"holding_return_rate_percent_{index}", 0)
+        platform_return_rate_percent = _parse_optional_float(
+            form.get(f"platform_return_rate_percent_{index}", "")
         )
-        if category == "cash":
-            holding_return_rate_percent = 0
+        manual_holding_cost = _parse_optional_float(form.get(f"holding_cost_amount_{index}", ""))
+        holding_cost_amount = _derive_holding_cost_amount(
+            amount=amount,
+            category=category,
+            transaction_amount=transaction_amount,
+            previous_amount=previous_amount,
+            previous_holding_cost=previous_holding_cost,
+            cumulative_pnl_amount=cumulative_pnl_amount,
+            platform_return_rate_percent=platform_return_rate_percent,
+            manual_holding_cost=manual_holding_cost,
+        )
+        holding_return_rate_percent = _holding_return_rate(amount, holding_cost_amount)
         holdings.append(
             HoldingInput(
                 product_name=product_name,
@@ -200,6 +213,8 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
                 transaction_amount=transaction_amount,
                 weekly_pnl_amount=weekly_pnl_amount,
                 cumulative_pnl_amount=cumulative_pnl_amount,
+                platform_return_rate_percent=platform_return_rate_percent or 0,
+                holding_cost_amount=holding_cost_amount,
                 holding_return_rate_percent=holding_return_rate_percent,
                 valuation_cutoff_date=str(form.get(f"valuation_cutoff_date_{index}", "")),
                 exposure_equity_percent=_parse_float(
@@ -227,6 +242,42 @@ def _parse_optional_float(value) -> float | None:
     return float(value)
 
 
+def _derive_holding_cost_amount(
+    *,
+    amount: float,
+    category: str,
+    transaction_amount: float,
+    previous_amount: float | None,
+    previous_holding_cost: float | None,
+    cumulative_pnl_amount: float,
+    platform_return_rate_percent: float | None,
+    manual_holding_cost: float | None,
+) -> float:
+    if category == "cash":
+        return 0
+    if platform_return_rate_percent is not None:
+        denominator = 1 + platform_return_rate_percent / 100
+        if denominator > 0:
+            return round(amount / denominator, 2)
+    if previous_holding_cost is not None:
+        if transaction_amount >= 0:
+            return round(max(previous_holding_cost + transaction_amount, 0), 2)
+        if previous_amount and previous_amount > 0:
+            redemption_ratio = min(abs(transaction_amount) / previous_amount, 1)
+            return round(max(previous_holding_cost * (1 - redemption_ratio), 0), 2)
+        return round(max(previous_holding_cost, 0), 2)
+    if manual_holding_cost is not None:
+        return round(max(manual_holding_cost, 0), 2)
+    implied_cost = amount - cumulative_pnl_amount
+    return round(implied_cost if implied_cost > 0 else amount, 2)
+
+
+def _holding_return_rate(amount: float, holding_cost_amount: float) -> float:
+    if holding_cost_amount <= 0:
+        return 0
+    return round(((amount - holding_cost_amount) / holding_cost_amount) * 100, 2)
+
+
 def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
     if snapshot is None:
         return {
@@ -249,9 +300,12 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                     "transaction_amount": 0,
                     "weekly_pnl_amount": 0,
                     "cumulative_pnl_amount": 0,
+                    "platform_return_rate_percent": "",
+                    "holding_cost_amount": "",
                     "holding_return_rate_percent": "",
                     "previous_amount": "",
                     "previous_cumulative_pnl_amount": "",
+                    "previous_holding_cost_amount": "",
                     "valuation_cutoff_date": "",
                     "exposure_equity_percent": "",
                     "exposure_fixed_income_percent": "",
@@ -283,9 +337,12 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                 "transaction_amount": 0 if copy_as_new else holding.transaction_amount,
                 "weekly_pnl_amount": 0 if copy_as_new else holding.weekly_pnl_amount,
                 "cumulative_pnl_amount": holding.cumulative_pnl_amount,
-                "holding_return_rate_percent": "" if copy_as_new else holding.holding_return_rate_percent,
+                "platform_return_rate_percent": "" if copy_as_new else holding.platform_return_rate_percent,
+                "holding_cost_amount": holding.holding_cost_amount,
+                "holding_return_rate_percent": holding.holding_return_rate_percent,
                 "previous_amount": holding.amount if copy_as_new else "",
                 "previous_cumulative_pnl_amount": holding.cumulative_pnl_amount if copy_as_new else "",
+                "previous_holding_cost_amount": holding.holding_cost_amount if copy_as_new else "",
                 "valuation_cutoff_date": "" if copy_as_new else holding.valuation_cutoff_date,
                 "exposure_equity_percent": holding.exposure_equity_percent,
                 "exposure_fixed_income_percent": holding.exposure_fixed_income_percent,

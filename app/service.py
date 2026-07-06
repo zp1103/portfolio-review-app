@@ -393,6 +393,8 @@ class PortfolioService:
                 transaction_amount,
                 weekly_pnl_amount,
                 cumulative_pnl_amount,
+                platform_return_rate_percent,
+                holding_cost_amount,
                 holding_return_rate_percent,
                 valuation_cutoff_date,
                 exposure_equity_percent,
@@ -401,7 +403,7 @@ class PortfolioService:
                 exposure_gold_percent,
                 exposure_other_percent,
                 notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
@@ -414,6 +416,8 @@ class PortfolioService:
                 holding.transaction_amount,
                 holding.weekly_pnl_amount,
                 holding.cumulative_pnl_amount,
+                holding.platform_return_rate_percent,
+                holding.holding_cost_amount,
                 holding.holding_return_rate_percent,
                 holding.valuation_cutoff_date,
                 holding.exposure_equity_percent,
@@ -432,6 +436,8 @@ class PortfolioService:
             "weekly_pnl_amount": holding.weekly_pnl_amount,
             "transaction_amount": holding.transaction_amount,
             "cumulative_pnl_amount": holding.cumulative_pnl_amount,
+            "platform_return_rate_percent": holding.platform_return_rate_percent,
+            "holding_cost_amount": holding.holding_cost_amount,
             "holding_return_rate_percent": holding.holding_return_rate_percent,
             "category": holding.category,
             "label": CATEGORY_LABELS.get(holding.category, holding.category),
