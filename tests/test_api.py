@@ -208,14 +208,19 @@ class ApiTests(unittest.TestCase):
         self.assertIn('value="-260.0"', response.text)
         self.assertIn('value="2026-04-18"', response.text)
         self.assertIn("普通账户到周五", response.text)
+        self.assertRegex(
+            response.text,
+            r'(?s)<select name="action_0">.*?'
+            r'<option value="buy" selected>买入</option>.*?</select>',
+        )
 
     def test_dashboard_can_copy_existing_snapshot_as_new_draft(self) -> None:
         create_response = self.client.post(
             "/api/weekly-snapshots",
             json={
                 "snapshot_date": "2026-04-18",
-                "total_assets": 421000,
-                "cash_balance": 80000,
+                "total_assets": 130000,
+                "cash_balance": 0,
                 "weekly_return_amount": -3200,
                 "ytd_return_amount": 8600,
                 "data_cutoff_notes": "普通账户到周五",
@@ -225,9 +230,10 @@ class ApiTests(unittest.TestCase):
                         "product_name": "全球稳健配置组合",
                         "account_type": "第三方平台账户",
                         "amount": 100000,
-                        "allocation_percent": 23.75,
+                        "allocation_percent": 76.92,
                         "category": "fixed_income",
-                        "action": "hold",
+                        "action": "buy",
+                        "transaction_amount": 5000,
                         "weekly_pnl_amount": 660,
                         "cumulative_pnl_amount": 11800,
                         "valuation_cutoff_date": "2026-04-18",
@@ -235,7 +241,25 @@ class ApiTests(unittest.TestCase):
                         "exposure_fixed_income_percent": 60,
                         "exposure_cash_percent": 10,
                         "notes": "固收60%，权益30%",
-                    }
+                    },
+                    {
+                        "product_name": "科创50",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 7.69,
+                        "category": "equity",
+                        "action": "sell",
+                        "transaction_amount": -2000,
+                    },
+                    {
+                        "product_name": "黄金ETF",
+                        "account_type": "普通账户",
+                        "amount": 20000,
+                        "allocation_percent": 15.39,
+                        "category": "gold",
+                        "action": "rebalance",
+                        "transaction_amount": 3000,
+                    },
                 ],
             },
         )
@@ -256,6 +280,22 @@ class ApiTests(unittest.TestCase):
         self.assertIn('name="cumulative_pnl_amount_0" value="11800.0"', response.text)
         self.assertIn('name="valuation_cutoff_date_0" value=""', response.text)
         self.assertIn('name="exposure_fixed_income_percent_0" value="60.0"', response.text)
+        for index in range(3):
+            self.assertRegex(
+                response.text,
+                rf'(?s)<select name="action_{index}">.*?'
+                rf'<option value="hold" selected>持有</option>.*?</select>',
+            )
+            self.assertIn(
+                f'name="transaction_amount_{index}" value="0"',
+                response.text,
+            )
+
+        source_snapshot = self.client.get("/api/weekly-snapshots").json()[0]
+        self.assertEqual(
+            [holding["action"] for holding in source_snapshot["holdings"]],
+            ["buy", "sell", "rebalance"],
+        )
 
     def test_form_submission_derives_pnl_from_previous_snapshot_and_transaction(self) -> None:
         response = self.client.post(

@@ -268,7 +268,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                 "amount": holding.amount,
                 "allocation_percent": holding.allocation_percent,
                 "category": holding.category,
-                "action": holding.action,
+                "action": "hold" if copy_as_new else holding.action,
                 "transaction_amount": 0 if copy_as_new else holding.transaction_amount,
                 "weekly_pnl_amount": 0 if copy_as_new else holding.weekly_pnl_amount,
                 "cumulative_pnl_amount": holding.cumulative_pnl_amount,
