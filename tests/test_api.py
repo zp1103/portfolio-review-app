@@ -330,6 +330,131 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(holding["cumulative_pnl_amount"], 15000)
         self.assertEqual(holding["transaction_amount"], 5000)
 
+    def test_form_submission_keeps_cash_pnl_zero_when_cash_balance_changes(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-06-29",
+                "product_name_0": "现金账户",
+                "account_type_0": "普通账户",
+                "amount_0": "43191.46",
+                "previous_amount_0": "43317.15",
+                "previous_cumulative_pnl_amount_0": "0",
+                "transaction_amount_0": "0",
+                "allocation_percent_0": "0",
+                "category_0": "cash",
+                "action_0": "hold",
+                "weekly_pnl_amount_0": "",
+                "cumulative_pnl_amount_0": "",
+                "valuation_cutoff_date_0": "2026-06-29",
+                "holding_notes_0": "",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        snapshots = self.client.get("/api/weekly-snapshots").json()
+        holding = snapshots[0]["holdings"][0]
+        self.assertEqual(snapshots[0]["weekly_return_amount"], 0)
+        self.assertEqual(snapshots[0]["cash_balance"], 43191.46)
+        self.assertEqual(holding["weekly_pnl_amount"], 0)
+        self.assertEqual(holding["cumulative_pnl_amount"], 0)
+        self.assertEqual(holding["transaction_amount"], 0)
+
+    def test_form_submission_keeps_platform_return_rate_separate_from_strategy_pnl(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-07-03",
+                "product_name_0": "易方达上证科创50联接A",
+                "account_type_0": "普通账户",
+                "amount_0": "50999.71",
+                "previous_amount_0": "54685.02",
+                "previous_cumulative_pnl_amount_0": "20296.67",
+                "transaction_amount_0": "-2509.84",
+                "allocation_percent_0": "0",
+                "category_0": "equity",
+                "action_0": "hold",
+                "weekly_pnl_amount_0": "",
+                "cumulative_pnl_amount_0": "",
+                "platform_return_rate_percent_0": "49.94",
+                "holding_cost_amount_0": "",
+                "valuation_cutoff_date_0": "2026-07-03",
+                "holding_notes_0": "",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        snapshots = self.client.get("/api/weekly-snapshots").json()
+        holding = snapshots[0]["holdings"][0]
+        self.assertEqual(holding["weekly_pnl_amount"], -1175.47)
+        self.assertAlmostEqual(holding["cumulative_pnl_amount"], 19121.20, places=2)
+        self.assertEqual(holding["platform_return_rate_percent"], 49.94)
+        self.assertAlmostEqual(holding["holding_return_rate_percent"], 49.94, places=2)
+
+    def test_form_submission_initializes_cost_from_platform_return_rate(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-07-03",
+                "product_name_0": "易方达上证科创50联接A",
+                "account_type_0": "普通账户",
+                "amount_0": "50999.71",
+                "allocation_percent_0": "0",
+                "category_0": "equity",
+                "action_0": "hold",
+                "weekly_pnl_amount_0": "-1175.47",
+                "cumulative_pnl_amount_0": "19121.20",
+                "platform_return_rate_percent_0": "49.94",
+                "holding_cost_amount_0": "",
+                "valuation_cutoff_date_0": "2026-07-03",
+                "holding_notes_0": "",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        holding = self.client.get("/api/weekly-snapshots").json()[0]["holdings"][0]
+        self.assertEqual(holding["platform_return_rate_percent"], 49.94)
+        self.assertAlmostEqual(holding["holding_cost_amount"], 34013.41, places=2)
+        self.assertAlmostEqual(holding["holding_return_rate_percent"], 49.94, places=2)
+
+    def test_form_submission_rolls_cost_basis_from_previous_snapshot_and_redemption(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-07-10",
+                "product_name_0": "易方达上证科创50联接A",
+                "account_type_0": "普通账户",
+                "amount_0": "47000",
+                "previous_amount_0": "50999.71",
+                "previous_cumulative_pnl_amount_0": "19121.20",
+                "previous_holding_cost_amount_0": "34013.48",
+                "transaction_amount_0": "-3000",
+                "allocation_percent_0": "0",
+                "category_0": "equity",
+                "action_0": "sell",
+                "weekly_pnl_amount_0": "",
+                "cumulative_pnl_amount_0": "",
+                "platform_return_rate_percent_0": "",
+                "holding_cost_amount_0": "",
+                "valuation_cutoff_date_0": "2026-07-10",
+                "holding_notes_0": "",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        holding = self.client.get("/api/weekly-snapshots").json()[0]["holdings"][0]
+        self.assertEqual(holding["weekly_pnl_amount"], -999.71)
+        self.assertAlmostEqual(holding["holding_cost_amount"], 32012.68, places=2)
+        self.assertAlmostEqual(holding["holding_return_rate_percent"], 46.82, places=2)
+
     def test_form_submission_updates_existing_snapshot(self) -> None:
         create_response = self.client.post(
             "/api/weekly-snapshots",

@@ -53,6 +53,9 @@ class Database:
                     transaction_amount REAL NOT NULL DEFAULT 0,
                     weekly_pnl_amount REAL NOT NULL DEFAULT 0,
                     cumulative_pnl_amount REAL NOT NULL DEFAULT 0,
+                    platform_return_rate_percent REAL NOT NULL DEFAULT 0,
+                    holding_cost_amount REAL NOT NULL DEFAULT 0,
+                    holding_return_rate_percent REAL NOT NULL DEFAULT 0,
                     valuation_cutoff_date TEXT NOT NULL DEFAULT '',
                     exposure_equity_percent REAL NOT NULL DEFAULT 0,
                     exposure_fixed_income_percent REAL NOT NULL DEFAULT 0,
@@ -101,6 +104,18 @@ class Database:
             if "cumulative_pnl_amount" not in columns:
                 connection.execute(
                     "ALTER TABLE holdings ADD COLUMN cumulative_pnl_amount REAL NOT NULL DEFAULT 0"
+                )
+            if "platform_return_rate_percent" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN platform_return_rate_percent REAL NOT NULL DEFAULT 0"
+                )
+            if "holding_cost_amount" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN holding_cost_amount REAL NOT NULL DEFAULT 0"
+                )
+            if "holding_return_rate_percent" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN holding_return_rate_percent REAL NOT NULL DEFAULT 0"
                 )
             if "valuation_cutoff_date" not in columns:
                 connection.execute(
