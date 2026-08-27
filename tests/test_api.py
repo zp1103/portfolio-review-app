@@ -21,6 +21,163 @@ class ApiTests(unittest.TestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
 
+    def _seed_performance_history(self) -> None:
+        from datetime import date, timedelta
+
+        for index in range(9):
+            active_amount = 50000 + index * 500
+            long_term_amount = 50000 + index * 200
+            response = self.client.post(
+                "/api/weekly-snapshots",
+                json={
+                    "snapshot_date": str(
+                        date(2026, 6, 26) + timedelta(days=7 * index)
+                    ),
+                    "total_assets": active_amount + long_term_amount,
+                    "cash_balance": 0,
+                    "weekly_return_amount": 700,
+                    "external_net_flow_amount": 0,
+                    "external_flow_confirmed": True,
+                    "holdings": [
+                        {
+                            "product_name": "科创50",
+                            "account_type": "普通账户",
+                            "amount": active_amount,
+                            "allocation_percent": 50,
+                            "category": "equity",
+                            "weekly_pnl_amount": 500,
+                            "management_role": "active_watch",
+                            "comparison_group": "star50",
+                        },
+                        {
+                            "product_name": "养老金中证500增强",
+                            "account_type": "养老金账户",
+                            "amount": long_term_amount,
+                            "allocation_percent": 50,
+                            "category": "equity",
+                            "weekly_pnl_amount": 200,
+                            "management_role": "long_term",
+                            "comparison_group": "broad",
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+    def test_analysis_page_renders_empty_state_and_disclaimer(self) -> None:
+        response = self.client.get("/analysis")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("趋势观察", response.text)
+        self.assertIn("数据积累中", response.text)
+        self.assertIn("trend-v1", response.text)
+        self.assertIn("不构成涨跌预测、交易建议或调仓指令", response.text)
+        self.assertNotIn("0.00%", response.text)
+
+    def test_analysis_page_separates_active_and_objective_products(self) -> None:
+        self._seed_performance_history()
+
+        response = self.client.get("/analysis")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("主动观察", response.text)
+        self.assertIn("科创50", response.text)
+        self.assertIn("4期收益", response.text)
+        self.assertIn("资金流调整净值", response.text)
+        self.assertIn("长期与稳定资产", response.text)
+        self.assertIn("养老金中证500增强", response.text)
+        self.assertEqual(response.text.count("确认状态："), 1)
+        self.assertNotIn("自动调仓", response.text)
+
+    def test_analysis_page_distinguishes_unavailable_states(self) -> None:
+        first = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-07-03",
+                "total_assets": 20000,
+                "cash_balance": 0,
+                "holdings": [
+                    {
+                        "product_name": "无效计算产品",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 50,
+                        "category": "equity",
+                    },
+                    {
+                        "product_name": "中断产品",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 50,
+                        "category": "equity",
+                    },
+                ],
+            },
+        )
+        second = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-07-10",
+                "total_assets": 2000,
+                "cash_balance": 0,
+                "holdings": [
+                    {
+                        "product_name": "无效计算产品",
+                        "account_type": "普通账户",
+                        "amount": 1000,
+                        "allocation_percent": 50,
+                        "category": "equity",
+                        "transaction_amount": -30000,
+                    },
+                    {
+                        "product_name": "新进入产品",
+                        "account_type": "普通账户",
+                        "amount": 1000,
+                        "allocation_percent": 50,
+                        "category": "equity",
+                    },
+                ],
+            },
+        )
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+
+        response = self.client.get("/analysis")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("数据积累中", response.text)
+        self.assertIn("数据不连续", response.text)
+        self.assertIn("计算不可用", response.text)
+        self.assertIn("可比较产品不足", response.text)
+        self.assertIn("系统估算", response.text)
+
+    def test_analysis_page_keeps_exited_products_in_collapsed_history(self) -> None:
+        self._seed_performance_history()
+        latest = self.client.get("/api/weekly-snapshots").json()[0]
+        active_product = next(
+            holding
+            for holding in latest["holdings"]
+            if holding["product_name"] == "科创50"
+        )
+        updated = self.client.post(
+            f"/products/{active_product['product_id']}",
+            data={
+                "management_role": "active_watch",
+                "comparison_group": "star50",
+                "lifecycle_status": "exited",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(updated.status_code, 303)
+
+        response = self.client.get("/analysis")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<details class="exit-history">', response.text)
+        self.assertIn("退出历史", response.text)
+        self.assertIn("已退出", response.text)
+        self.assertIn("科创50", response.text)
+
     def test_healthcheck_returns_ok(self) -> None:
         response = self.client.get("/health")
 

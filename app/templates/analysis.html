@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>趋势观察 · 资产复盘系统</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="layout analysis-page">
+        <nav class="top-nav">
+          <a href="/">录入复盘</a>
+          <a href="/analysis" class="active">趋势观察</a>
+          <a href="/products">产品设置</a>
+        </nav>
+
+        <header class="analysis-hero">
+          <div>
+            <p class="eyebrow">Performance Review</p>
+            <h1>趋势观察</h1>
+            <p class="intro">
+              从连续周度快照中识别组合表现与产品状态，保留证据强度、数据质量和退出历史。
+            </p>
+          </div>
+          <div class="analysis-hero-note">
+            <span>只读观察</span>
+            <strong>基于历史数据</strong>
+            <p>状态需要连续证据确认，不用于生成操作指令。</p>
+          </div>
+        </header>
+
+        <section class="card performance-card">
+          <header class="section-head">
+            <div>
+              <p class="mini-label">Portfolio</p>
+              <h2>组合表现</h2>
+            </div>
+            <span class="rule-badge">{{ analysis.rule_version }}</span>
+          </header>
+
+          {% if analysis.portfolio.available %}
+            <div class="metric-grid">
+              <article>
+                <span>累计收益</span>
+                <strong>{{ '%.2f'|format(analysis.portfolio.cumulative_return * 100) }}%</strong>
+              </article>
+              <article>
+                <span>当前回撤</span>
+                <strong>{{ '%.2f'|format(analysis.portfolio.current_drawdown * 100) }}%</strong>
+              </article>
+              <article>
+                <span>最大回撤</span>
+                <strong>{{ '%.2f'|format(analysis.portfolio.max_drawdown * 100) }}%</strong>
+              </article>
+              <article>
+                <span>阶段高点</span>
+                <strong>{{ analysis.portfolio.high_date }}</strong>
+              </article>
+            </div>
+            <div class="chart-heading">
+              <div>
+                <strong>资金流调整净值</strong>
+                <span>起始估算净值 1000</span>
+              </div>
+              {% if analysis.portfolio.latest_flow is not none %}
+                <div class="latest-flow">
+                  <span>最新外部净资金流</span>
+                  <strong>{% if analysis.portfolio.latest_flow > 0 %}+{% endif %}{{ '%.2f'|format(analysis.portfolio.latest_flow) }}</strong>
+                  <em>{{ flow_source_labels.get(analysis.portfolio.latest_flow_source, '计算不可用') }}</em>
+                </div>
+              {% endif %}
+            </div>
+            <svg class="nav-chart" viewBox="0 0 1000 260" role="img" aria-label="估算资金流调整净值">
+              <polyline points="{{ analysis.portfolio.chart_points }}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke" />
+            </svg>
+          {% else %}
+            <div class="empty-history">
+              {% if analysis.portfolio.nav_points|length < 2 %}
+                <p>数据积累中</p>
+                <span>至少录入两期快照后计算资金流调整收益。</span>
+              {% else %}
+                <p>计算不可用</p>
+                <span>当前快照存在无效收益分母，无法生成连续净值。</span>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if analysis.portfolio.quality %}
+            <aside class="analysis-quality" aria-label="数据质量提示">
+              <strong>数据质量提示</strong>
+              <ul>
+                {% for item in analysis.portfolio.quality %}
+                  <li>{{ item }}</li>
+                {% endfor %}
+              </ul>
+            </aside>
+          {% endif %}
+        </section>
+
+        <section class="card">
+          <header class="section-head">
+            <div>
+              <p class="mini-label">Active Watch</p>
+              <h2>主动观察</h2>
+              <p>状态识别仅用于回看历史趋势，并标明确认进度与证据强度。</p>
+            </div>
+          </header>
+          {% if analysis.active_products %}
+            <div class="trend-grid">
+              {% for product in analysis.active_products %}
+                <article class="trend-card">
+                  <header>
+                    <div>
+                      <strong>{{ product.name }}</strong>
+                      <span>{{ product.account_type }}</span>
+                    </div>
+                    <em>{{ lifecycle_labels.get(product.lifecycle, product.lifecycle) }}</em>
+                  </header>
+                  <div class="horizon-grid">
+                    {% for period in [4, 8, 12] %}
+                      <div>
+                        <span>{{ period }}期收益</span>
+                        {% if product.returns[period] is not none %}
+                          <strong>{{ '%.2f'|format(product.returns[period] * 100) }}%</strong>
+                        {% elif product.data_status == 'available' %}
+                          <strong>数据积累中</strong>
+                        {% else %}
+                          <strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                  <div class="trend-evidence">
+                    <p>数据状态：<strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong></p>
+                    {% if product.confirmed_state is defined %}
+                      <p>
+                        确认状态：<strong>{{ state_labels.get(product.confirmed_state, '尚未确认') }}</strong>{% if product.confirmed_state == 'turning' and product.confirmed_detail %}（{{ turning_detail_labels.get(product.confirmed_detail, product.confirmed_detail) }}）{% endif %}
+                      </p>
+                      {% if product.pending %}
+                        <p>
+                          候选状态：<strong>{{ state_labels.get(product.candidate_state, '尚未确认') }}</strong>{% if product.candidate_detail %}（{{ turning_detail_labels.get(product.candidate_detail, product.candidate_detail) }}）{% endif %}，待确认 1/2
+                        </p>
+                      {% endif %}
+                      <p>证据强度：<strong>{{ evidence_labels.get(product.evidence, '低') }}</strong></p>
+                    {% else %}
+                      <p>确认状态：<strong>数据积累中</strong></p>
+                    {% endif %}
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-history">
+              <p>暂无主动观察产品</p>
+              <span>可在产品设置中调整管理角色。</span>
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="card comparison-card">
+          <header class="section-head">
+            <div>
+              <p class="mini-label">Comparison</p>
+              <h2>分周期排名</h2>
+              <p>仅在同周期至少有两个可计算的主动观察产品时展示。</p>
+            </div>
+          </header>
+          <div class="comparison-grid">
+            {% for period in [4, 8, 12] %}
+              <article class="ranking-card">
+                <h3>{{ period }}期收益</h3>
+                {% if analysis.comparison[period] %}
+                  <ol>
+                    {% for row in analysis.comparison[period] %}
+                      <li>
+                        <span><b>{{ row[2] }}</b>{{ row[0] }}</span>
+                        <strong>{{ '%.2f'|format(row[1] * 100) }}%</strong>
+                      </li>
+                    {% endfor %}
+                  </ol>
+                {% else %}
+                  <div class="comparison-empty">可比较产品不足</div>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="card objective-section">
+          <header class="section-head">
+            <div>
+              <p class="mini-label">Long Term &amp; Stable</p>
+              <h2>长期与稳定资产</h2>
+              <p>只展示客观收益、回撤、高点和数据状态，不进行趋势状态判断。</p>
+            </div>
+          </header>
+          {% if analysis.objective_products %}
+            <div class="trend-grid objective-grid">
+              {% for product in analysis.objective_products %}
+                <article class="trend-card objective-card">
+                  <header>
+                    <div>
+                      <strong>{{ product.name }}</strong>
+                      <span>{{ product.account_type }}</span>
+                    </div>
+                    <em>{{ lifecycle_labels.get(product.lifecycle, product.lifecycle) }}</em>
+                  </header>
+                  <div class="horizon-grid">
+                    {% for period in [4, 8, 12] %}
+                      <div>
+                        <span>{{ period }}期收益</span>
+                        {% if product.returns[period] is not none %}
+                          <strong>{{ '%.2f'|format(product.returns[period] * 100) }}%</strong>
+                        {% elif product.data_status == 'available' %}
+                          <strong>数据积累中</strong>
+                        {% else %}
+                          <strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                  <dl class="objective-metrics">
+                    <div>
+                      <dt>当前回撤</dt>
+                      <dd>{% if product.current_drawdown is not none %}{{ '%.2f'|format(product.current_drawdown * 100) }}%{% else %}{{ data_status_labels.get(product.data_status, '计算不可用') }}{% endif %}</dd>
+                    </div>
+                    <div>
+                      <dt>阶段高点</dt>
+                      <dd>{{ product.high_date if product.high_date else data_status_labels.get(product.data_status, '计算不可用') }}</dd>
+                    </div>
+                    <div>
+                      <dt>数据状态</dt>
+                      <dd>{{ data_status_labels.get(product.data_status, '计算不可用') }}</dd>
+                    </div>
+                  </dl>
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-history">
+              <p>暂无长期或稳定资产</p>
+              <span>符合角色的产品会在此展示客观表现指标。</span>
+            </div>
+          {% endif %}
+        </section>
+
+        <details class="exit-history">
+          <summary>
+            <span>退出历史</span>
+            <em>{{ analysis.exited_products|length }} 个产品</em>
+          </summary>
+          {% if analysis.exited_products %}
+            <div class="trend-grid exit-grid">
+              {% for product in analysis.exited_products %}
+                <article class="trend-card exit-card">
+                  <header>
+                    <div>
+                      <strong>{{ product.name }}</strong>
+                      <span>{{ product.account_type }}</span>
+                    </div>
+                    <em>{{ lifecycle_labels.get(product.lifecycle, product.lifecycle) }}</em>
+                  </header>
+                  <div class="horizon-grid">
+                    {% for period in [4, 8, 12] %}
+                      <div>
+                        <span>{{ period }}期收益</span>
+                        {% if product.returns[period] is not none %}
+                          <strong>{{ '%.2f'|format(product.returns[period] * 100) }}%</strong>
+                        {% elif product.data_status == 'available' %}
+                          <strong>数据积累中</strong>
+                        {% else %}
+                          <strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                  <p class="exit-status">数据状态：{{ data_status_labels.get(product.data_status, '计算不可用') }}</p>
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-history compact-empty">
+              <p>暂无退出产品</p>
+            </div>
+          {% endif %}
+        </details>
+
+        <footer class="analysis-disclaimer">
+          本页面仅基于已录入的历史数据进行状态识别，不构成涨跌预测、交易建议或调仓指令。
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

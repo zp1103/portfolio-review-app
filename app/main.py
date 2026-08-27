@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.db import Database
 from app.demo_seeder import seed_demo_data_if_needed
+from app.performance_service import PerformanceService
 from app.product_service import ProductService
 from app.schemas import HoldingInput, ProductUpdateInput, SnapshotCreateInput
 from app.service import PortfolioService
@@ -32,6 +33,34 @@ CATEGORY_LABELS = {
     "gold": "黄金",
     "other": "其他",
 }
+STATE_LABELS = {
+    "up": "上行",
+    "down": "下行",
+    "sideways": "震荡",
+    "turning": "转折观察",
+}
+EVIDENCE_LABELS = {"low": "低", "medium": "中", "high": "高"}
+TURNING_DETAIL_LABELS = {
+    "weak_to_strong": "由弱转强",
+    "strong_to_weak": "由强转弱",
+    "": "",
+}
+LIFECYCLE_LABELS = {
+    "active": "正常",
+    "planned_exit": "计划退出",
+    "exited": "已退出",
+}
+DATA_STATUS_LABELS = {
+    "available": "数据可用",
+    "accumulating": "数据积累中",
+    "discontinuous": "数据不连续",
+    "unavailable": "计算不可用",
+}
+FLOW_SOURCE_LABELS = {
+    "confirmed": "已确认",
+    "estimated": "系统估算",
+    "unavailable": "计算不可用",
+}
 
 
 def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
@@ -40,6 +69,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
     seed_demo_data_if_needed(database)
     service = PortfolioService(database)
     product_service = ProductService(database)
+    performance_service = PerformanceService(database)
     templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
     app = FastAPI(title="Portfolio Review App")
@@ -111,6 +141,22 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
             request=request,
             name="products.html",
             context={"products": product_service.list_products()},
+        )
+
+    @app.get("/analysis", response_class=HTMLResponse)
+    def performance_analysis(request: Request):
+        return templates.TemplateResponse(
+            request=request,
+            name="analysis.html",
+            context={
+                "analysis": performance_service.get_analysis(),
+                "state_labels": STATE_LABELS,
+                "evidence_labels": EVIDENCE_LABELS,
+                "turning_detail_labels": TURNING_DETAIL_LABELS,
+                "lifecycle_labels": LIFECYCLE_LABELS,
+                "data_status_labels": DATA_STATUS_LABELS,
+                "flow_source_labels": FLOW_SOURCE_LABELS,
+            },
         )
 
     @app.post("/products/{product_id}")
