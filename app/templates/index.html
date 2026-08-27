@@ -9,6 +9,12 @@
   <body>
     <div class="page-shell">
       <main class="layout">
+        <nav class="top-nav">
+          <a href="/" class="active">录入复盘</a>
+          <a href="/analysis">趋势观察</a>
+          <a href="/products">产品设置</a>
+        </nav>
+
         <section class="hero-panel">
           <div class="hero-copy">
             <p class="eyebrow">Portfolio Review</p>
@@ -86,6 +92,10 @@
                 {% elif issue.type == 'exposure_sum_invalid' %}
                 <p>持仓：<strong>{{ issue.details.product_name }}</strong></p>
                 <p class="data-quality-detail">穿透比例合计：<strong>{{ '%.2f'|format(issue.details.exposure_sum) }}%</strong>（应为 {{ issue.details.expected }}%）</p>
+                {% elif issue.type == 'product_unmapped' %}
+                <p>持仓：<strong>{{ issue.details.product_name }}</strong></p>
+                {% elif issue.type == 'external_flow_unconfirmed' %}
+                <p>快照日期：<strong>{{ issue.details.snapshot_date }}</strong></p>
                 {% endif %}
               </div>
             </article>
@@ -318,16 +328,18 @@
                 </h3>
                 <p>{{ cashflow_analysis.formula_text }}</p>
               </article>
-              <div class="cashflow-formula">
-                <p>本周净资金流 = 本周总资产 - 上期总资产 - 本周收益</p>
-                <span>
-                  {{ '%.2f'|format(cashflow_analysis.latest_total_assets) }}
-                  -
-                  {{ '%.2f'|format(cashflow_analysis.previous_total_assets) }}
-                  -
-                  {{ '%.2f'|format(cashflow_analysis.weekly_return_amount) }}
-                </span>
-              </div>
+              {% if cashflow_analysis.source == 'estimated' %}
+                <div class="cashflow-formula">
+                  <p>本周净资金流 = 本周总资产 - 上期总资产 - 本周收益</p>
+                  <span>
+                    {{ '%.2f'|format(cashflow_analysis.latest_total_assets) }}
+                    -
+                    {{ '%.2f'|format(cashflow_analysis.previous_total_assets) }}
+                    -
+                    {{ '%.2f'|format(cashflow_analysis.weekly_return_amount) }}
+                  </span>
+                </div>
+              {% endif %}
             </div>
           {% else %}
             <div class="empty-history">
@@ -386,6 +398,22 @@
                   <span>年内收益</span>
                   <input type="number" step="0.01" name="ytd_return_amount" id="ytd-return-input" value="{{ form_values.ytd_return_amount }}" readonly />
                 </label>
+                <label>
+                  <span>外部净资金流</span>
+                  <input type="number" step="0.01" id="external-net-flow-input"
+                         name="external_net_flow_amount" value="{{ form_values.external_net_flow_amount }}" />
+                </label>
+                <label class="flow-confirmation">
+                  <span>资金流口径</span>
+                  <span class="checkbox-row">
+                    <input type="checkbox" name="external_flow_confirmed" value="1"
+                           id="external-flow-confirmed"
+                           {% if form_values.external_flow_confirmed %}checked{% endif %} />
+                    已核对本期净转入/转出
+                  </span>
+                </label>
+                <input type="hidden" id="previous-total-assets"
+                       value="{{ previous_total_assets if previous_total_assets is not none else '' }}" />
                 <label class="full-width">
                   <span>数据截止说明</span>
                   <input type="text" name="data_cutoff_notes" value="{{ form_values.data_cutoff_notes }}" placeholder="例如：普通账户到周五，第三方到账周四，养老金到账周三；正式周收益统一按周三口径。" />
@@ -415,6 +443,7 @@
                       <button type="button" class="ghost-button danger-button remove-holding-button" {% if row == 0 %}disabled{% endif %}>删除</button>
                     </div>
                     <div class="field-grid holding-grid">
+                      <input type="hidden" name="product_id_{{ row }}" value="{{ holding.product_id or '' }}" />
                       <label class="span-2">
                         <span>产品名称</span>
                         <input type="text" name="product_name_{{ row }}" value="{{ holding.product_name }}" required />
@@ -427,11 +456,37 @@
                           {% endfor %}
                         </select>
                       </label>
+                      {% if not holding.product_id %}
+                        <label>
+                          <span>管理角色</span>
+                          <select name="management_role_{{ row }}">
+                            <option value="active_watch">主动观察</option>
+                            <option value="long_term">长期持有</option>
+                            <option value="stable">稳定资产</option>
+                            <option value="liquidity">流动性</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>比较分组</span>
+                          <select name="comparison_group_{{ row }}">
+                            <option value="other">其他</option>
+                            <option value="broad">宽基</option>
+                            <option value="star50">科创</option>
+                            <option value="hang_seng">恒生</option>
+                          </select>
+                        </label>
+                      {% else %}
+                        <div class="product-profile-link span-2">
+                          <span>产品角色与分组</span>
+                          <a href="/products" class="inline-link">已绑定产品档案 · 前往产品设置</a>
+                        </div>
+                      {% endif %}
                       <label>
                         <span>金额</span>
                         <input type="number" step="0.01" min="0" name="amount_{{ row }}" value="{{ holding.amount }}" class="holding-amount-input" required />
                         <input type="hidden" name="previous_amount_{{ row }}" value="{{ holding.previous_amount }}" class="previous-amount-input" />
                         <input type="hidden" name="previous_cumulative_pnl_amount_{{ row }}" value="{{ holding.previous_cumulative_pnl_amount }}" class="previous-cumulative-pnl-input" />
+                        <input type="hidden" name="previous_holding_cost_amount_{{ row }}" value="{{ holding.previous_holding_cost_amount }}" class="previous-holding-cost-input" />
                       </label>
                       <label>
                         <span>占总资产比(%)</span>
@@ -465,19 +520,27 @@
                         <input type="number" step="0.01" name="weekly_pnl_amount_{{ row }}" value="{{ holding.weekly_pnl_amount }}" class="holding-weekly-pnl-input {% if holding.previous_amount != '' %}derived-input{% endif %}" {% if holding.previous_amount != '' %}readonly{% endif %} />
                       </label>
                       <label>
-                        <span>累计盈亏金额</span>
+                        <span>策略累计盈亏金额</span>
                         <input type="number" step="0.01" name="cumulative_pnl_amount_{{ row }}" value="{{ holding.cumulative_pnl_amount }}" class="holding-cumulative-pnl-input {% if holding.previous_cumulative_pnl_amount != '' %}derived-input{% endif %}" {% if holding.previous_cumulative_pnl_amount != '' %}readonly{% endif %} />
+                      </label>
+                      <label>
+                        <span>平台收益率(%)</span>
+                        <input type="number" step="0.01" name="platform_return_rate_percent_{{ row }}" value="{{ holding.platform_return_rate_percent }}" class="platform-return-rate-input" placeholder="可选，用于校准成本" />
                       </label>
                       <label>
                         <span>本周收益率(%)</span>
                         <input type="number" step="0.01" value="{% if holding.amount and holding.weekly_pnl_amount %}{{ '%.2f'|format((holding.weekly_pnl_amount / holding.amount) * 100) }}{% endif %}" class="holding-weekly-return-rate-input derived-input" readonly />
                       </label>
                       <label>
-                        <span>推导持仓成本</span>
-                        <input type="number" step="0.01" value="{% if holding.amount != '' %}{% set implied_cost = holding.amount - holding.cumulative_pnl_amount %}{% if implied_cost > 0 %}{{ '%.2f'|format(implied_cost) }}{% endif %}{% endif %}" class="holding-cost-input derived-input" readonly />
+                        <span>系统持仓成本</span>
+                        <input type="number" step="0.01" name="holding_cost_amount_{{ row }}" value="{{ holding.holding_cost_amount }}" class="holding-cost-input" placeholder="可手动校准" />
                       </label>
                       <label>
-                        <span>累计收益率(%)</span>
+                        <span>系统持仓收益率(%)</span>
+                        <input type="number" step="0.01" value="{{ holding.holding_return_rate_percent }}" class="holding-return-rate-input derived-input" readonly />
+                      </label>
+                      <label>
+                        <span>策略累计收益率(%)</span>
                         <input type="number" step="0.01" value="{% if holding.amount != '' %}{% set implied_cost = holding.amount - holding.cumulative_pnl_amount %}{% if implied_cost > 0 %}{{ '%.2f'|format((holding.cumulative_pnl_amount / implied_cost) * 100) }}{% endif %}{% endif %}" class="holding-cumulative-return-rate-input derived-input" readonly />
                       </label>
                       <label>
@@ -567,7 +630,7 @@
                       <li>
                         <div>
                           <strong>{{ holding.product_name }}</strong>
-                          <span>{{ holding.category }} · {{ holding.action }}{% if holding.transaction_amount %} · 交易净额 {{ '%.2f'|format(holding.transaction_amount) }}{% endif %} · 本周盈亏 {{ '%.2f'|format(holding.weekly_pnl_amount) }} · 周收益率 {% if holding.amount %}{{ '%.2f'|format((holding.weekly_pnl_amount / holding.amount) * 100) }}%{% else %}--{% endif %} · 累计盈亏 {{ '%.2f'|format(holding.cumulative_pnl_amount) }} · 累计收益率 {% set implied_cost = holding.amount - holding.cumulative_pnl_amount %}{% if implied_cost > 0 %}{{ '%.2f'|format((holding.cumulative_pnl_amount / implied_cost) * 100) }}%{% else %}--{% endif %}{% if holding.valuation_cutoff_date %} · 估值截止 {{ holding.valuation_cutoff_date }}{% endif %}</span>
+                          <span>{{ holding.category }} · {{ holding.action }}{% if holding.transaction_amount %} · 交易净额 {{ '%.2f'|format(holding.transaction_amount) }}{% endif %} · 本周盈亏 {{ '%.2f'|format(holding.weekly_pnl_amount) }} · 周收益率 {% if holding.amount %}{{ '%.2f'|format((holding.weekly_pnl_amount / holding.amount) * 100) }}%{% else %}--{% endif %} · 平台收益率 {% if holding.platform_return_rate_percent %}{{ '%.2f'|format(holding.platform_return_rate_percent) }}%{% else %}--{% endif %} · 系统持仓成本 {{ '%.2f'|format(holding.holding_cost_amount) }} · 系统持仓收益率 {% if holding.holding_return_rate_percent %}{{ '%.2f'|format(holding.holding_return_rate_percent) }}%{% else %}--{% endif %} · 策略累计盈亏 {{ '%.2f'|format(holding.cumulative_pnl_amount) }} · 策略累计收益率 {% set implied_cost = holding.amount - holding.cumulative_pnl_amount %}{% if implied_cost > 0 %}{{ '%.2f'|format((holding.cumulative_pnl_amount / implied_cost) * 100) }}%{% else %}--{% endif %}{% if holding.valuation_cutoff_date %} · 估值截止 {{ holding.valuation_cutoff_date }}{% endif %}</span>
                         </div>
                         <em>{{ '%.2f'|format(holding.amount) }}</em>
                       </li>
@@ -601,6 +664,7 @@
           <button type="button" class="ghost-button danger-button remove-holding-button">删除</button>
         </div>
         <div class="field-grid holding-grid">
+          <input type="hidden" name="product_id___INDEX__" value="" />
           <label class="span-2">
             <span>产品名称</span>
             <input type="text" name="product_name___INDEX__" required />
@@ -614,10 +678,29 @@
             </select>
           </label>
           <label>
+            <span>管理角色</span>
+            <select name="management_role___INDEX__">
+              <option value="active_watch">主动观察</option>
+              <option value="long_term">长期持有</option>
+              <option value="stable">稳定资产</option>
+              <option value="liquidity">流动性</option>
+            </select>
+          </label>
+          <label>
+            <span>比较分组</span>
+            <select name="comparison_group___INDEX__">
+              <option value="other">其他</option>
+              <option value="broad">宽基</option>
+              <option value="star50">科创</option>
+              <option value="hang_seng">恒生</option>
+            </select>
+          </label>
+          <label>
             <span>金额</span>
             <input type="number" step="0.01" min="0" name="amount___INDEX__" class="holding-amount-input" required />
             <input type="hidden" name="previous_amount___INDEX__" value="" class="previous-amount-input" />
             <input type="hidden" name="previous_cumulative_pnl_amount___INDEX__" value="" class="previous-cumulative-pnl-input" />
+            <input type="hidden" name="previous_holding_cost_amount___INDEX__" value="" class="previous-holding-cost-input" />
           </label>
           <label>
             <span>占总资产比(%)</span>
@@ -651,19 +734,27 @@
             <input type="number" step="0.01" name="weekly_pnl_amount___INDEX__" value="0" class="holding-weekly-pnl-input" />
           </label>
           <label>
-            <span>累计盈亏金额</span>
+            <span>策略累计盈亏金额</span>
             <input type="number" step="0.01" name="cumulative_pnl_amount___INDEX__" value="0" class="holding-cumulative-pnl-input" />
+          </label>
+          <label>
+            <span>平台收益率(%)</span>
+            <input type="number" step="0.01" name="platform_return_rate_percent___INDEX__" value="" class="platform-return-rate-input" placeholder="可选，用于校准成本" />
           </label>
           <label>
             <span>本周收益率(%)</span>
             <input type="number" step="0.01" class="holding-weekly-return-rate-input derived-input" readonly />
           </label>
           <label>
-            <span>推导持仓成本</span>
-            <input type="number" step="0.01" class="holding-cost-input derived-input" readonly />
+            <span>系统持仓成本</span>
+            <input type="number" step="0.01" name="holding_cost_amount___INDEX__" value="" class="holding-cost-input" placeholder="可手动校准" />
           </label>
           <label>
-            <span>累计收益率(%)</span>
+            <span>系统持仓收益率(%)</span>
+            <input type="number" step="0.01" class="holding-return-rate-input derived-input" readonly />
+          </label>
+          <label>
+            <span>策略累计收益率(%)</span>
             <input type="number" step="0.01" class="holding-cumulative-return-rate-input derived-input" readonly />
           </label>
           <label>
@@ -714,7 +805,25 @@
       const weeklyReturnInput = document.getElementById("weekly-return-input");
       const weeklyReturnRateInput = document.getElementById("weekly-return-rate-input");
       const ytdReturnInput = document.getElementById("ytd-return-input");
+      const externalFlowInput = document.getElementById("external-net-flow-input");
+      const externalFlowConfirmed = document.getElementById("external-flow-confirmed");
+      const previousTotalAssetsInput = document.getElementById("previous-total-assets");
+      let externalFlowIsManual = externalFlowInput?.value !== "";
       let rowIndex = holdingsContainer.querySelectorAll(".holding-row").length;
+
+      externalFlowInput?.addEventListener("input", () => {
+        externalFlowIsManual = true;
+      });
+
+      function recalculateExternalFlow() {
+        if (!externalFlowInput || externalFlowConfirmed?.checked || externalFlowIsManual) return;
+        const previous = Number(previousTotalAssetsInput?.value || NaN);
+        const total = Number(totalAssetsInput?.value || 0);
+        const pnl = Number(weeklyReturnInput?.value || 0);
+        externalFlowInput.value = Number.isFinite(previous)
+          ? (total - previous - pnl).toFixed(2)
+          : "";
+      }
 
       function bindRemoveButtons() {
         holdingsContainer.querySelectorAll(".remove-holding-button").forEach((button) => {
@@ -773,21 +882,65 @@
         holdingsContainer.querySelectorAll(".holding-row").forEach((row) => {
           const amountInput = row.querySelector(".holding-amount-input");
           const cumulativePnlInput = row.querySelector(".holding-cumulative-pnl-input");
-          const costInput = row.querySelector(".holding-cost-input");
           const cumulativeRateInput = row.querySelector(".holding-cumulative-return-rate-input");
-          if (!amountInput || !cumulativePnlInput || !costInput || !cumulativeRateInput) return;
+          if (!amountInput || !cumulativePnlInput || !cumulativeRateInput) return;
           const amount = Number(amountInput.value || 0);
           const cumulativePnl = Number(cumulativePnlInput.value || 0);
           const impliedCost = amount - cumulativePnl;
           if (impliedCost > 0) {
-            costInput.value = impliedCost.toFixed(2);
             cumulativeRateInput.value = ((cumulativePnl / impliedCost) * 100).toFixed(2);
           } else {
-            costInput.value = "";
             cumulativeRateInput.value = "";
           }
         });
         recalculateYtdReturn();
+      }
+
+      function recalculateHoldingCostMetrics() {
+        holdingsContainer.querySelectorAll(".holding-row").forEach((row) => {
+          const amountInput = row.querySelector(".holding-amount-input");
+          const categorySelect = row.querySelector('select[name^="category_"]');
+          const transactionInput = row.querySelector(".transaction-amount-input");
+          const previousAmountInput = row.querySelector(".previous-amount-input");
+          const previousCostInput = row.querySelector(".previous-holding-cost-input");
+          const platformRateInput = row.querySelector(".platform-return-rate-input");
+          const costInput = row.querySelector(".holding-cost-input");
+          const returnRateInput = row.querySelector(".holding-return-rate-input");
+          if (!amountInput || !costInput || !returnRateInput) return;
+
+          const amount = Number(amountInput.value || 0);
+          if (categorySelect?.value === "cash") {
+            costInput.value = "0.00";
+            returnRateInput.value = "0.00";
+            return;
+          }
+
+          const platformRateRaw = platformRateInput?.value ?? "";
+          const previousCostRaw = previousCostInput?.value ?? "";
+          const previousAmountRaw = previousAmountInput?.value ?? "";
+          const transactionAmount = Number(transactionInput?.value || 0);
+
+          if (platformRateRaw !== "") {
+            const denominator = 1 + Number(platformRateRaw) / 100;
+            if (denominator > 0) {
+              costInput.value = (amount / denominator).toFixed(2);
+            }
+          } else if (previousCostRaw !== "") {
+            const previousCost = Number(previousCostRaw || 0);
+            if (transactionAmount >= 0) {
+              costInput.value = Math.max(previousCost + transactionAmount, 0).toFixed(2);
+            } else {
+              const previousAmount = Number(previousAmountRaw || 0);
+              if (previousAmount > 0) {
+                const redemptionRatio = Math.min(Math.abs(transactionAmount) / previousAmount, 1);
+                costInput.value = Math.max(previousCost * (1 - redemptionRatio), 0).toFixed(2);
+              }
+            }
+          }
+
+          const cost = Number(costInput.value || 0);
+          returnRateInput.value = cost > 0 ? (((amount - cost) / cost) * 100).toFixed(2) : "";
+        });
       }
 
       function recalculateYtdReturn() {
@@ -808,7 +961,14 @@
           const weeklyPnlInput = row.querySelector(".holding-weekly-pnl-input");
           const previousCumulativePnlInput = row.querySelector(".previous-cumulative-pnl-input");
           const cumulativePnlInput = row.querySelector(".holding-cumulative-pnl-input");
+          const categorySelect = row.querySelector('select[name^="category_"]');
           if (!amountInput || !previousAmountInput || previousAmountInput.value === "" || !weeklyPnlInput) return;
+
+          if (categorySelect?.value === "cash") {
+            weeklyPnlInput.value = "0.00";
+            if (cumulativePnlInput) cumulativePnlInput.value = "0.00";
+            return;
+          }
 
           const amount = Number(amountInput.value || 0);
           const previousAmount = Number(previousAmountInput.value || 0);
@@ -845,6 +1005,8 @@
         recalculateAllocationPercents();
         recalculateWeeklyReturn();
         recalculateHoldingCumulativeMetrics();
+        recalculateHoldingCostMetrics();
+        recalculateExternalFlow();
       }
 
       function bindAmountInputs() {
@@ -878,6 +1040,7 @@
           weeklyReturnRateInput.value = totalAssets > 0 ? ((total / totalAssets) * 100).toFixed(2) : "";
         }
         recalculateHoldingWeeklyReturnRates();
+        recalculateExternalFlow();
       }
 
       function bindWeeklyPnlInputs() {
@@ -889,6 +1052,12 @@
       function bindCumulativePnlInputs() {
         holdingsContainer.querySelectorAll(".holding-cumulative-pnl-input").forEach((input) => {
           input.oninput = recalculateHoldingCumulativeMetrics;
+        });
+      }
+
+      function bindHoldingCostInputs() {
+        holdingsContainer.querySelectorAll(".holding-cost-input, .platform-return-rate-input").forEach((input) => {
+          input.oninput = recalculateHoldingCostMetrics;
         });
       }
 
@@ -905,10 +1074,12 @@
         bindTransactionInputs();
         bindWeeklyPnlInputs();
         bindCumulativePnlInputs();
+        bindHoldingCostInputs();
         refreshLabels();
         recalculateSnapshotTotals();
         recalculateWeeklyReturn();
         recalculateHoldingCumulativeMetrics();
+        recalculateHoldingCostMetrics();
         newRow?.scrollIntoView({ behavior: "smooth", block: "center" });
         newRow?.querySelector('input[name^="product_name_"]')?.focus();
       }
@@ -921,10 +1092,12 @@
       bindTransactionInputs();
       bindWeeklyPnlInputs();
       bindCumulativePnlInputs();
+      bindHoldingCostInputs();
       refreshLabels();
       recalculateSnapshotTotals();
       recalculateWeeklyReturn();
       recalculateHoldingCumulativeMetrics();
+      recalculateHoldingCostMetrics();
     </script>
   </body>
 </html>

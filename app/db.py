@@ -14,6 +14,7 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.path)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
     @contextmanager
@@ -36,13 +37,28 @@ class Database:
                     cash_balance REAL NOT NULL,
                     weekly_return_amount REAL NOT NULL DEFAULT 0,
                     ytd_return_amount REAL NOT NULL DEFAULT 0,
+                    external_net_flow_amount REAL NULL,
+                    external_flow_confirmed INTEGER NOT NULL DEFAULT 0,
                     data_cutoff_notes TEXT NOT NULL DEFAULT '',
                     notes TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS portfolio_products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    canonical_name TEXT NOT NULL,
+                    account_type TEXT NOT NULL,
+                    management_role TEXT NOT NULL,
+                    comparison_group TEXT NOT NULL DEFAULT 'other',
+                    lifecycle_status TEXT NOT NULL DEFAULT 'active',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(canonical_name, account_type)
+                );
+
                 CREATE TABLE IF NOT EXISTS holdings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id INTEGER REFERENCES portfolio_products(id),
                     snapshot_id INTEGER NOT NULL,
                     product_name TEXT NOT NULL,
                     account_type TEXT NOT NULL,
@@ -53,6 +69,9 @@ class Database:
                     transaction_amount REAL NOT NULL DEFAULT 0,
                     weekly_pnl_amount REAL NOT NULL DEFAULT 0,
                     cumulative_pnl_amount REAL NOT NULL DEFAULT 0,
+                    platform_return_rate_percent REAL NOT NULL DEFAULT 0,
+                    holding_cost_amount REAL NOT NULL DEFAULT 0,
+                    holding_return_rate_percent REAL NOT NULL DEFAULT 0,
                     valuation_cutoff_date TEXT NOT NULL DEFAULT '',
                     exposure_equity_percent REAL NOT NULL DEFAULT 0,
                     exposure_fixed_income_percent REAL NOT NULL DEFAULT 0,
@@ -85,6 +104,15 @@ class Database:
                 connection.execute(
                     "ALTER TABLE weekly_snapshots ADD COLUMN data_cutoff_notes TEXT NOT NULL DEFAULT ''"
                 )
+            if "external_net_flow_amount" not in columns:
+                connection.execute(
+                    "ALTER TABLE weekly_snapshots ADD COLUMN external_net_flow_amount REAL NULL"
+                )
+            if "external_flow_confirmed" not in columns:
+                connection.execute(
+                    "ALTER TABLE weekly_snapshots "
+                    "ADD COLUMN external_flow_confirmed INTEGER NOT NULL DEFAULT 0"
+                )
 
             columns = {
                 row["name"]
@@ -102,9 +130,26 @@ class Database:
                 connection.execute(
                     "ALTER TABLE holdings ADD COLUMN cumulative_pnl_amount REAL NOT NULL DEFAULT 0"
                 )
+            if "platform_return_rate_percent" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN platform_return_rate_percent REAL NOT NULL DEFAULT 0"
+                )
+            if "holding_cost_amount" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN holding_cost_amount REAL NOT NULL DEFAULT 0"
+                )
+            if "holding_return_rate_percent" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN holding_return_rate_percent REAL NOT NULL DEFAULT 0"
+                )
             if "valuation_cutoff_date" not in columns:
                 connection.execute(
                     "ALTER TABLE holdings ADD COLUMN valuation_cutoff_date TEXT NOT NULL DEFAULT ''"
+                )
+            if "product_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE holdings ADD COLUMN product_id INTEGER "
+                    "REFERENCES portfolio_products(id)"
                 )
             for exposure_column in (
                 "exposure_equity_percent",
@@ -117,6 +162,38 @@ class Database:
                     connection.execute(
                         f"ALTER TABLE holdings ADD COLUMN {exposure_column} REAL NOT NULL DEFAULT 0"
                     )
+
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO portfolio_products (
+                    canonical_name, account_type, management_role, comparison_group, lifecycle_status
+                )
+                SELECT DISTINCT
+                    product_name,
+                    account_type,
+                    CASE
+                        WHEN account_type = '养老金账户' THEN 'long_term'
+                        WHEN category = 'cash' THEN 'liquidity'
+                        WHEN category = 'fixed_income' THEN 'stable'
+                        ELSE 'active_watch'
+                    END,
+                    'other',
+                    'active'
+                FROM holdings
+                """
+            )
+            connection.execute(
+                """
+                UPDATE holdings
+                SET product_id = (
+                    SELECT p.id
+                    FROM portfolio_products AS p
+                    WHERE p.canonical_name = holdings.product_name
+                      AND p.account_type = holdings.account_type
+                )
+                WHERE product_id IS NULL
+                """
+            )
 
             connection.execute(
                 """

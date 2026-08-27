@@ -13,9 +13,9 @@ class PortfolioServiceTests(unittest.TestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        database = Database(self.temp_dir / "portfolio.db")
-        database.initialize()
-        self.service = PortfolioService(database)
+        self.database = Database(self.temp_dir / "portfolio.db")
+        self.database.initialize()
+        self.service = PortfolioService(self.database)
 
     def tearDown(self) -> None:
         if self.temp_dir.exists():
@@ -350,6 +350,53 @@ class PortfolioServiceTests(unittest.TestCase):
         self.assertEqual(cashflow["net_flow"], 12000)
         self.assertEqual(cashflow["direction"], "inflow")
         self.assertIn("净流入 12000.00", cashflow["formula_text"])
+
+    def test_snapshot_uses_confirmed_external_flow(self) -> None:
+        snapshot = self.service.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-08-21",
+                total_assets=110000,
+                cash_balance=10000,
+                weekly_return_amount=2000,
+                external_net_flow_amount=8000,
+                external_flow_confirmed=True,
+                holdings=[],
+            )
+        )
+
+        self.assertEqual(snapshot.external_net_flow_amount, 8000)
+        self.assertTrue(snapshot.external_flow_confirmed)
+
+    def test_cashflow_analysis_distinguishes_confirmed_value_from_inference(
+        self,
+    ) -> None:
+        for snapshot_date, assets, pnl, flow, confirmed in (
+            ("2026-08-14", 100000, 0, 0, True),
+            ("2026-08-21", 110000, 2000, 1234, True),
+        ):
+            self.service.create_snapshot(SnapshotCreateInput(
+                snapshot_date=snapshot_date,
+                total_assets=assets,
+                cash_balance=assets,
+                weekly_return_amount=pnl,
+                external_net_flow_amount=flow,
+                external_flow_confirmed=confirmed,
+                holdings=[HoldingInput(
+                    product_name="现金",
+                    account_type="货币/现金账户",
+                    amount=assets,
+                    allocation_percent=100,
+                    category="cash",
+                )],
+            ))
+
+        cashflow = self.service.get_cashflow_analysis()
+
+        self.assertEqual(cashflow["net_flow"], 1234)
+        self.assertEqual(cashflow["inferred_flow"], 8000)
+        self.assertEqual(cashflow["source"], "confirmed")
+        self.assertIn("已确认/修正", cashflow["formula_text"])
+        self.assertNotIn("推算", cashflow["formula_text"])
 
     def test_lookthrough_analysis_uses_holding_exposure_percentages(self) -> None:
         self.service.create_snapshot(

@@ -16,9 +16,9 @@ class DataQualityServiceTests(unittest.TestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        database = Database(self.temp_dir / "portfolio.db")
-        database.initialize()
-        self.service = PortfolioService(database)
+        self.database = Database(self.temp_dir / "portfolio.db")
+        self.database.initialize()
+        self.service = PortfolioService(self.database)
 
     def tearDown(self) -> None:
         if self.temp_dir.exists():
@@ -29,6 +29,94 @@ class DataQualityServiceTests(unittest.TestCase):
 
         self.assertFalse(checks["available"])
         self.assertEqual(checks["issues"], [])
+
+    def test_reports_unmapped_product_and_unconfirmed_flow(self) -> None:
+        for snapshot_date, amount, pnl in (
+            ("2026-08-14", 100000, 0),
+            ("2026-08-21", 101000, 1000),
+        ):
+            self.service.create_snapshot(
+                SnapshotCreateInput(
+                    snapshot_date=snapshot_date,
+                    total_assets=amount,
+                    cash_balance=0,
+                    weekly_return_amount=pnl,
+                    external_net_flow_amount=0,
+                    external_flow_confirmed=False,
+                    holdings=[
+                        HoldingInput(
+                            product_name="科创50",
+                            account_type="普通账户",
+                            amount=amount,
+                            allocation_percent=100,
+                            category="equity",
+                            weekly_pnl_amount=pnl,
+                        )
+                    ],
+                )
+            )
+        with self.database.session() as connection:
+            connection.execute(
+                "UPDATE holdings SET product_id = NULL WHERE snapshot_id = "
+                "(SELECT id FROM weekly_snapshots "
+                "ORDER BY snapshot_date DESC LIMIT 1)"
+            )
+            connection.execute(
+                "UPDATE weekly_snapshots SET external_flow_confirmed = 0 "
+                "WHERE snapshot_date = '2026-08-21'"
+            )
+
+        issues = self.service.get_data_quality_checks()["issues"]
+        issues_by_type = {issue["type"]: issue for issue in issues}
+
+        self.assertIn("product_unmapped", issues_by_type)
+        self.assertIn("external_flow_unconfirmed", issues_by_type)
+        self.assertEqual(issues_by_type["product_unmapped"]["severity"], "warning")
+        self.assertEqual(
+            issues_by_type["product_unmapped"]["details"],
+            {"product_name": "科创50"},
+        )
+        self.assertEqual(
+            issues_by_type["external_flow_unconfirmed"]["severity"],
+            "info",
+        )
+        self.assertEqual(
+            issues_by_type["external_flow_unconfirmed"]["details"],
+            {"snapshot_date": "2026-08-21"},
+        )
+
+    def test_confirmed_flag_without_amount_is_still_estimated_and_unconfirmed(
+        self,
+    ) -> None:
+        for snapshot_date, amount, pnl in (
+            ("2026-08-14", 100000, 0),
+            ("2026-08-21", 105000, 1000),
+        ):
+            self.service.create_snapshot(SnapshotCreateInput(
+                snapshot_date=snapshot_date,
+                total_assets=amount,
+                cash_balance=amount,
+                weekly_return_amount=pnl,
+                external_net_flow_amount=None,
+                external_flow_confirmed=True,
+                holdings=[HoldingInput(
+                    product_name="现金",
+                    account_type="货币/现金账户",
+                    amount=amount,
+                    allocation_percent=100,
+                    category="cash",
+                )],
+            ))
+
+        cashflow = self.service.get_cashflow_analysis()
+        issue_types = {
+            issue["type"]
+            for issue in self.service.get_data_quality_checks()["issues"]
+        }
+
+        self.assertEqual(cashflow["net_flow"], 4000)
+        self.assertEqual(cashflow["source"], "estimated")
+        self.assertIn("external_flow_unconfirmed", issue_types)
 
     def test_quality_checks_passed_with_valid_data(self) -> None:
         self.service.create_snapshot(
@@ -385,6 +473,7 @@ class DataQualityApiTests(unittest.TestCase):
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.database = Database(self.temp_dir / "portfolio.db")
         self.client = TestClient(create_app(self.temp_dir / "portfolio.db"))
 
     def tearDown(self) -> None:
@@ -476,6 +565,52 @@ class DataQualityApiTests(unittest.TestCase):
         self.assertIn("总资产与持仓金额合计不一致", response.text)
         self.assertIn("现金余额与现金类持仓金额不一致", response.text)
         self.assertIn("穿透比例合计异常", response.text)
+
+    def test_dashboard_shows_unmapped_product_and_unconfirmed_flow_details(self) -> None:
+        for snapshot_date, amount, pnl in (
+            ("2026-08-14", 100000, 0),
+            ("2026-08-21", 101000, 1000),
+        ):
+            created = self.client.post(
+                "/api/weekly-snapshots",
+                json={
+                    "snapshot_date": snapshot_date,
+                    "total_assets": amount,
+                    "cash_balance": 0,
+                    "weekly_return_amount": pnl,
+                    "external_net_flow_amount": 0,
+                    "external_flow_confirmed": True,
+                    "holdings": [
+                        {
+                            "product_name": "科创50",
+                            "account_type": "普通账户",
+                            "amount": amount,
+                            "allocation_percent": 100,
+                            "category": "equity",
+                            "weekly_pnl_amount": pnl,
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(created.status_code, 201)
+        with self.database.session() as connection:
+            connection.execute(
+                "UPDATE holdings SET product_id = NULL WHERE snapshot_id = "
+                "(SELECT id FROM weekly_snapshots "
+                "ORDER BY snapshot_date DESC LIMIT 1)"
+            )
+            connection.execute(
+                "UPDATE weekly_snapshots SET external_flow_confirmed = 0 "
+                "WHERE snapshot_date = '2026-08-21'"
+            )
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("尚未绑定产品档案", response.text)
+        self.assertIn("持仓：<strong>科创50</strong>", response.text)
+        self.assertIn("本期外部净资金流仍为系统估算", response.text)
+        self.assertIn("快照日期：<strong>2026-08-21</strong>", response.text)
 
     def test_saving_still_works_with_quality_issues(self) -> None:
         first_response = self.client.post(

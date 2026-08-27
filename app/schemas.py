@@ -8,11 +8,30 @@ from pydantic import BaseModel, Field
 
 Category = Literal["equity", "fixed_income", "cash", "gold", "other"]
 Action = Literal["buy", "sell", "hold", "rebalance"]
+ManagementRole = Literal["active_watch", "long_term", "stable", "liquidity"]
+ComparisonGroup = Literal["broad", "star50", "hang_seng", "other"]
+LifecycleStatus = Literal["active", "planned_exit", "exited"]
+
+
+class ProductUpdateInput(BaseModel):
+    management_role: ManagementRole
+    comparison_group: ComparisonGroup = "other"
+    lifecycle_status: LifecycleStatus = "active"
+
+
+class ProductRecord(ProductUpdateInput):
+    id: int
+    canonical_name: str
+    account_type: str
 
 
 class HoldingInput(BaseModel):
+    product_id: int | None = None
     product_name: str = Field(min_length=1, max_length=100)
     account_type: str = Field(min_length=1, max_length=50)
+    management_role: ManagementRole | None = None
+    comparison_group: ComparisonGroup | None = None
+    lifecycle_status: LifecycleStatus | None = None
     amount: float = Field(ge=0)
     allocation_percent: float = Field(ge=0, le=100)
     category: Category
@@ -20,6 +39,9 @@ class HoldingInput(BaseModel):
     transaction_amount: float = 0
     weekly_pnl_amount: float = 0
     cumulative_pnl_amount: float = 0
+    platform_return_rate_percent: float = 0
+    holding_cost_amount: float = 0
+    holding_return_rate_percent: float = 0
     valuation_cutoff_date: str = ""
     exposure_equity_percent: float = Field(default=0, ge=0, le=100)
     exposure_fixed_income_percent: float = Field(default=0, ge=0, le=100)
@@ -35,6 +57,8 @@ class SnapshotCreateInput(BaseModel):
     cash_balance: float = Field(ge=0)
     weekly_return_amount: float = 0
     ytd_return_amount: float = 0
+    external_net_flow_amount: float | None = None
+    external_flow_confirmed: bool = False
     data_cutoff_notes: str = ""
     notes: str = ""
     holdings: list[HoldingInput] = Field(default_factory=list)
@@ -52,6 +76,8 @@ class SnapshotRecord(BaseModel):
     cash_balance: float
     weekly_return_amount: float
     ytd_return_amount: float
+    external_net_flow_amount: float | None
+    external_flow_confirmed: bool
     data_cutoff_notes: str
     notes: str
     holdings: list[HoldingRecord] = Field(default_factory=list)
@@ -80,6 +106,12 @@ def snapshot_from_row(row: Mapping[str, object], holdings: list[HoldingRecord]) 
         cash_balance=float(row["cash_balance"]),
         weekly_return_amount=float(row["weekly_return_amount"]),
         ytd_return_amount=float(row["ytd_return_amount"]),
+        external_net_flow_amount=(
+            float(row["external_net_flow_amount"])
+            if row["external_net_flow_amount"] is not None
+            else None
+        ),
+        external_flow_confirmed=bool(row["external_flow_confirmed"]),
         data_cutoff_notes=str(row["data_cutoff_notes"] or ""),
         notes=str(row["notes"] or ""),
         holdings=holdings,
@@ -90,6 +122,7 @@ def holding_from_row(row: Mapping[str, object]) -> HoldingRecord:
     return HoldingRecord(
         id=int(row["id"]),
         snapshot_id=int(row["snapshot_id"]),
+        product_id=int(row["product_id"]) if row["product_id"] is not None else None,
         product_name=str(row["product_name"]),
         account_type=str(row["account_type"]),
         amount=float(row["amount"]),
@@ -99,6 +132,9 @@ def holding_from_row(row: Mapping[str, object]) -> HoldingRecord:
         transaction_amount=float(row["transaction_amount"] or 0),
         weekly_pnl_amount=float(row["weekly_pnl_amount"] or 0),
         cumulative_pnl_amount=float(row["cumulative_pnl_amount"] or 0),
+        platform_return_rate_percent=float(row["platform_return_rate_percent"] or 0),
+        holding_cost_amount=float(row["holding_cost_amount"] or 0),
+        holding_return_rate_percent=float(row["holding_return_rate_percent"] or 0),
         valuation_cutoff_date=str(row["valuation_cutoff_date"] or ""),
         exposure_equity_percent=float(row["exposure_equity_percent"] or 0),
         exposure_fixed_income_percent=float(row["exposure_fixed_income_percent"] or 0),

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from app.db import Database
+from app.product_service import ProductService
 from app.schemas import (
     AllocationSummary,
     CategorySummary,
@@ -36,9 +37,11 @@ LOOKTHROUGH_CATEGORIES = ("equity", "fixed_income", "cash", "gold", "other")
 class PortfolioService:
     def __init__(self, database: Database) -> None:
         self.database = database
+        self.product_service = ProductService(database)
 
     def create_snapshot(self, payload: SnapshotCreateInput) -> SnapshotRecord:
         with self.database.session() as connection:
+            resolved_holdings = self._resolve_holdings(connection, payload.holdings)
             cursor = connection.execute(
                 """
                 INSERT INTO weekly_snapshots (
@@ -47,9 +50,11 @@ class PortfolioService:
                     cash_balance,
                     weekly_return_amount,
                     ytd_return_amount,
+                    external_net_flow_amount,
+                    external_flow_confirmed,
                     data_cutoff_notes,
                     notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.snapshot_date,
@@ -57,27 +62,28 @@ class PortfolioService:
                     payload.cash_balance,
                     payload.weekly_return_amount,
                     payload.ytd_return_amount,
+                    payload.external_net_flow_amount,
+                    payload.external_flow_confirmed,
                     payload.data_cutoff_notes,
                     payload.notes,
                 ),
             )
             snapshot_id = cursor.lastrowid
 
-            for holding in payload.holdings:
-                self._insert_holding(connection, snapshot_id, holding)
+            for holding, product_id in resolved_holdings:
+                self._insert_holding(connection, snapshot_id, holding, product_id)
 
-            connection.commit()
-            return self.get_snapshot(snapshot_id)
+        return self.get_snapshot(snapshot_id)
 
     def update_snapshot(self, snapshot_id: int, payload: SnapshotCreateInput) -> SnapshotRecord:
         with self.database.session() as connection:
             existing = connection.execute(
-                "SELECT id FROM weekly_snapshots WHERE id = ?",
+                "SELECT 1 FROM weekly_snapshots WHERE id = ?",
                 (snapshot_id,),
             ).fetchone()
             if existing is None:
                 raise ValueError(f"Snapshot {snapshot_id} not found")
-
+            resolved_holdings = self._resolve_holdings(connection, payload.holdings)
             connection.execute(
                 """
                 UPDATE weekly_snapshots
@@ -86,6 +92,8 @@ class PortfolioService:
                     cash_balance = ?,
                     weekly_return_amount = ?,
                     ytd_return_amount = ?,
+                    external_net_flow_amount = ?,
+                    external_flow_confirmed = ?,
                     data_cutoff_notes = ?,
                     notes = ?
                 WHERE id = ?
@@ -96,17 +104,18 @@ class PortfolioService:
                     payload.cash_balance,
                     payload.weekly_return_amount,
                     payload.ytd_return_amount,
+                    payload.external_net_flow_amount,
+                    payload.external_flow_confirmed,
                     payload.data_cutoff_notes,
                     payload.notes,
                     snapshot_id,
                 ),
             )
             connection.execute("DELETE FROM holdings WHERE snapshot_id = ?", (snapshot_id,))
-            for holding in payload.holdings:
-                self._insert_holding(connection, snapshot_id, holding)
+            for holding, product_id in resolved_holdings:
+                self._insert_holding(connection, snapshot_id, holding, product_id)
 
-            connection.commit()
-            return self.get_snapshot(snapshot_id)
+        return self.get_snapshot(snapshot_id)
 
     def get_snapshot(self, snapshot_id: int) -> SnapshotRecord:
         with self.database.session() as connection:
@@ -133,6 +142,9 @@ class PortfolioService:
                 snapshots.append(snapshot_from_row(row, holdings))
 
             return snapshots
+
+    def list_snapshots_chronologically(self) -> list[SnapshotRecord]:
+        return list(reversed(self.list_snapshots()))
 
     def get_allocation_summary(self) -> AllocationSummary:
         snapshots = self.list_snapshots()
@@ -349,16 +361,31 @@ class PortfolioService:
 
         latest = snapshots[0]
         previous = snapshots[1]
-        net_flow = round(latest.total_assets - previous.total_assets - latest.weekly_return_amount, 2)
+        inferred = round(
+            latest.total_assets - previous.total_assets - latest.weekly_return_amount,
+            2,
+        )
+        net_flow = (
+            latest.external_net_flow_amount
+            if latest.external_net_flow_amount is not None
+            else inferred
+        )
+        source = (
+            "confirmed"
+            if latest.external_flow_confirmed
+            and latest.external_net_flow_amount is not None
+            else "estimated"
+        )
+        source_text = "已确认/修正" if source == "confirmed" else "系统估算"
         if net_flow > 0:
             direction = "inflow"
-            formula_text = f"较上一期推算净流入 {net_flow:.2f}"
+            formula_text = f"{source_text}净流入 {net_flow:.2f}"
         elif net_flow < 0:
             direction = "outflow"
-            formula_text = f"较上一期推算净流出 {abs(net_flow):.2f}"
+            formula_text = f"{source_text}净流出 {abs(net_flow):.2f}"
         else:
             direction = "flat"
-            formula_text = "较上一期无明显净资金流"
+            formula_text = f"{source_text}无明显净资金流"
 
         return {
             "available": True,
@@ -369,8 +396,30 @@ class PortfolioService:
             "latest_total_assets": latest.total_assets,
             "previous_total_assets": previous.total_assets,
             "weekly_return_amount": latest.weekly_return_amount,
+            "inferred_flow": inferred,
+            "source": source,
             "formula_text": formula_text,
         }
+
+    def get_previous_total_assets(self, snapshot_id: int | None = None) -> float | None:
+        with self.database.session() as connection:
+            if snapshot_id is None:
+                row = connection.execute(
+                    "SELECT total_assets FROM weekly_snapshots "
+                    "ORDER BY snapshot_date DESC LIMIT 1"
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT total_assets FROM weekly_snapshots
+                    WHERE snapshot_date < (
+                        SELECT snapshot_date FROM weekly_snapshots WHERE id = ?
+                    )
+                    ORDER BY snapshot_date DESC LIMIT 1
+                    """,
+                    (snapshot_id,),
+                ).fetchone()
+        return float(row["total_assets"]) if row is not None else None
 
     def _get_holdings_for_snapshot(self, connection, snapshot_id: int) -> list[HoldingRecord]:
         rows = connection.execute(
@@ -379,11 +428,18 @@ class PortfolioService:
         ).fetchall()
         return [holding_from_row(row) for row in rows]
 
-    def _insert_holding(self, connection, snapshot_id: int, holding: HoldingInput) -> None:
+    def _insert_holding(
+        self,
+        connection,
+        snapshot_id: int,
+        holding: HoldingInput,
+        product_id: int,
+    ) -> None:
         connection.execute(
             """
             INSERT INTO holdings (
                 snapshot_id,
+                product_id,
                 product_name,
                 account_type,
                 amount,
@@ -393,6 +449,9 @@ class PortfolioService:
                 transaction_amount,
                 weekly_pnl_amount,
                 cumulative_pnl_amount,
+                platform_return_rate_percent,
+                holding_cost_amount,
+                holding_return_rate_percent,
                 valuation_cutoff_date,
                 exposure_equity_percent,
                 exposure_fixed_income_percent,
@@ -400,10 +459,11 @@ class PortfolioService:
                 exposure_gold_percent,
                 exposure_other_percent,
                 notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
+                product_id,
                 holding.product_name,
                 holding.account_type,
                 holding.amount,
@@ -413,6 +473,9 @@ class PortfolioService:
                 holding.transaction_amount,
                 holding.weekly_pnl_amount,
                 holding.cumulative_pnl_amount,
+                holding.platform_return_rate_percent,
+                holding.holding_cost_amount,
+                holding.holding_return_rate_percent,
                 holding.valuation_cutoff_date,
                 holding.exposure_equity_percent,
                 holding.exposure_fixed_income_percent,
@@ -423,6 +486,23 @@ class PortfolioService:
             ),
         )
 
+    def _resolve_holdings(self, connection, holdings: list[HoldingInput]):
+        resolved = [
+            (
+                holding,
+                self.product_service.resolve_product(holding, connection),
+            )
+            for holding in holdings
+        ]
+        seen: set[int] = set()
+        for _, product_id in resolved:
+            if product_id in seen:
+                raise ValueError(
+                    f"Duplicate product_id {product_id} in one snapshot"
+                )
+            seen.add(product_id)
+        return resolved
+
     def _holding_contribution_item(self, holding: HoldingRecord) -> dict:
         return {
             "product_name": holding.product_name,
@@ -430,6 +510,9 @@ class PortfolioService:
             "weekly_pnl_amount": holding.weekly_pnl_amount,
             "transaction_amount": holding.transaction_amount,
             "cumulative_pnl_amount": holding.cumulative_pnl_amount,
+            "platform_return_rate_percent": holding.platform_return_rate_percent,
+            "holding_cost_amount": holding.holding_cost_amount,
+            "holding_return_rate_percent": holding.holding_return_rate_percent,
             "category": holding.category,
             "label": CATEGORY_LABELS.get(holding.category, holding.category),
         }
@@ -506,6 +589,14 @@ class PortfolioService:
             })
 
         for holding in latest.holdings:
+            if holding.product_id is None:
+                issues.append({
+                    "type": "product_unmapped",
+                    "severity": "warning",
+                    "message": f"持仓 '{holding.product_name}' 尚未绑定产品档案",
+                    "details": {"product_name": holding.product_name},
+                })
+
             exposure_total = (
                 holding.exposure_equity_percent
                 + holding.exposure_fixed_income_percent
@@ -539,6 +630,18 @@ class PortfolioService:
                         "implied_cost": implied_cost,
                     },
                 })
+
+        effective_flow_confirmed = (
+            latest.external_flow_confirmed
+            and latest.external_net_flow_amount is not None
+        )
+        if len(snapshots) >= 2 and not effective_flow_confirmed:
+            issues.append({
+                "type": "external_flow_unconfirmed",
+                "severity": "info",
+                "message": "本期外部净资金流仍为系统估算",
+                "details": {"snapshot_date": latest.snapshot_date},
+            })
 
         return {
             "available": True,

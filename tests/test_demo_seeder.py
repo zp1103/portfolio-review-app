@@ -35,6 +35,11 @@ class DemoSeederTests(unittest.TestCase):
         snapshots = service.list_snapshots()
 
         self.assertEqual(len(snapshots), DEMO_WEEKS)
+        with database.session() as connection:
+            missing = connection.execute(
+                "SELECT COUNT(*) AS count FROM holdings WHERE product_id IS NULL"
+            ).fetchone()["count"]
+        self.assertEqual(missing, 0)
 
     def test_seed_demo_data_includes_all_categories(self) -> None:
         database = Database(self.db_path)
