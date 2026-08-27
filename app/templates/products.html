@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>产品设置 · 资产复盘系统</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="layout">
+        <nav class="top-nav">
+          <a href="/">录入复盘</a>
+          <a href="/analysis">趋势观察</a>
+          <a href="/products" class="active">产品设置</a>
+        </nav>
+
+        <section class="card product-settings-card">
+          <div class="section-head">
+            <div>
+              <p class="mini-label">Product Profiles</p>
+              <h1>产品设置</h1>
+              <p>统一维护产品角色、比较分组和生命周期；每周录入会沿用稳定产品档案。</p>
+            </div>
+          </div>
+
+          {% if products %}
+            <div class="product-settings-list">
+              {% for product in products %}
+                <form method="post" action="/products/{{ product.id }}" class="product-setting-row">
+                  <div class="product-setting-identity">
+                    <strong>{{ product.canonical_name }}</strong>
+                    <span>{{ product.account_type }}</span>
+                  </div>
+                  <label>
+                    <span>管理角色</span>
+                    <select name="management_role">
+                      {% for value, label in [('active_watch','主动观察'),('long_term','长期持有'),('stable','稳定资产'),('liquidity','流动性')] %}
+                        <option value="{{ value }}" {% if product.management_role == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>
+                    <span>比较分组</span>
+                    <select name="comparison_group">
+                      {% for value, label in [('broad','宽基'),('star50','科创'),('hang_seng','恒生'),('other','其他')] %}
+                        <option value="{{ value }}" {% if product.comparison_group == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>
+                    <span>生命周期</span>
+                    <select name="lifecycle_status">
+                      {% for value, label in [('active','正常'),('planned_exit','计划退出'),('exited','已退出')] %}
+                        <option value="{{ value }}" {% if product.lifecycle_status == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <button type="submit" class="ghost-button">保存</button>
+                </form>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="empty-history">
+              <p>暂无产品档案。</p>
+              <span>保存第一份每周快照后，产品会自动出现在这里。</span>
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

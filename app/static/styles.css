@@ -48,6 +48,24 @@ body {
   gap: 24px;
 }
 
+.top-nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.top-nav a {
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.top-nav a.active {
+  background: var(--ink);
+  color: white;
+}
+
 .hero-panel,
 .card,
 .snapshot-item {
@@ -603,6 +621,52 @@ textarea {
   gap: 6px;
 }
 
+.product-settings-card,
+.product-settings-list {
+  display: grid;
+  gap: 18px;
+}
+
+.product-setting-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, 0.5fr)) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(37, 45, 68, 0.08);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.product-setting-identity {
+  display: grid;
+  gap: 6px;
+}
+
+.product-setting-identity span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.product-profile-link {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.product-profile-link > span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.inline-link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .exposure-panel {
   padding: 16px;
   border-radius: 18px;
@@ -851,6 +915,12 @@ textarea {
 
   .exposure-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .product-setting-row {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -27,6 +27,45 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
 
+    def test_product_settings_updates_role_group_and_lifecycle(self) -> None:
+        created = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-08-21",
+                "total_assets": 10000,
+                "cash_balance": 0,
+                "holdings": [
+                    {
+                        "product_name": "中证全指组合包",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 100,
+                        "category": "equity",
+                    }
+                ],
+            },
+        ).json()
+        product_id = created["holdings"][0]["product_id"]
+
+        page = self.client.get("/products")
+
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("中证全指组合包", page.text)
+
+        response = self.client.post(
+            f"/products/{product_id}",
+            data={
+                "management_role": "active_watch",
+                "comparison_group": "broad",
+                "lifecycle_status": "planned_exit",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        updated = self.client.get("/products")
+        self.assertIn('value="planned_exit" selected', updated.text)
+
     def test_dashboard_page_contains_snapshot_form(self) -> None:
         response = self.client.get("/")
 
@@ -46,6 +85,76 @@ class ApiTests(unittest.TestCase):
         self.assertIn('name="cumulative_pnl_amount_0"', response.text)
         self.assertIn('name="exposure_equity_percent_0"', response.text)
         self.assertIn("底层穿透比例", response.text)
+
+    def test_new_weekly_form_sets_product_role_and_group(self) -> None:
+        page = self.client.get("/")
+
+        self.assertIn('name="product_id_0" value=""', page.text)
+        self.assertIn('name="management_role_0"', page.text)
+        self.assertIn('name="comparison_group_0"', page.text)
+
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-08-21",
+                "product_id_0": "",
+                "product_name_0": "养老长期组合",
+                "account_type_0": "养老金账户",
+                "management_role_0": "long_term",
+                "comparison_group_0": "broad",
+                "amount_0": "10000",
+                "allocation_percent_0": "100",
+                "category_0": "equity",
+                "action_0": "hold",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        product_page = self.client.get("/products")
+        self.assertIn("养老长期组合", product_page.text)
+        self.assertIn('value="long_term" selected', product_page.text)
+        self.assertIn('value="broad" selected', product_page.text)
+
+    def test_edit_and_copy_forms_inherit_product_identity(self) -> None:
+        created = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-08-21",
+                "total_assets": 10000,
+                "cash_balance": 0,
+                "holdings": [
+                    {
+                        "product_name": "稳定身份产品",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 100,
+                        "category": "equity",
+                        "action": "buy",
+                        "transaction_amount": 2500,
+                    }
+                ],
+            },
+        ).json()
+        product_id = created["holdings"][0]["product_id"]
+
+        for query in ("edit_id", "copy_id"):
+            page = self.client.get(f"/?{query}={created['id']}")
+            self.assertIn(
+                f'name="product_id_0" value="{product_id}"',
+                page.text,
+            )
+            self.assertNotIn('name="management_role_0"', page.text)
+            self.assertNotIn('name="comparison_group_0"', page.text)
+            self.assertIn("已绑定产品档案 · 前往产品设置", page.text)
+
+        copied = self.client.get(f"/?copy_id={created['id']}")
+        self.assertIn('name="transaction_amount_0" value="0"', copied.text)
+        self.assertRegex(
+            copied.text,
+            r'(?s)<select name="action_0">.*?'
+            r'<option value="hold" selected>持有</option>.*?</select>',
+        )
 
     def test_create_snapshot_endpoint_persists_payload(self) -> None:
         payload = {

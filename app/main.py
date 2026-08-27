@@ -10,7 +10,8 @@ from fastapi.templating import Jinja2Templates
 
 from app.db import Database
 from app.demo_seeder import seed_demo_data_if_needed
-from app.schemas import HoldingInput, SnapshotCreateInput
+from app.product_service import ProductService
+from app.schemas import HoldingInput, ProductUpdateInput, SnapshotCreateInput
 from app.service import PortfolioService
 
 
@@ -38,6 +39,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
     database.initialize()
     seed_demo_data_if_needed(database)
     service = PortfolioService(database)
+    product_service = ProductService(database)
     templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
     app = FastAPI(title="Portfolio Review App")
@@ -102,6 +104,28 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
     @app.get("/api/weekly-snapshots")
     def list_weekly_snapshots():
         return service.list_snapshots()
+
+    @app.get("/products", response_class=HTMLResponse)
+    def product_settings(request: Request):
+        return templates.TemplateResponse(
+            request=request,
+            name="products.html",
+            context={"products": product_service.list_products()},
+        )
+
+    @app.post("/products/{product_id}")
+    async def update_product_settings(product_id: int, request: Request):
+        body = (await request.body()).decode("utf-8")
+        form = {key: values[-1] for key, values in parse_qs(body).items()}
+        product_service.update_product(
+            product_id,
+            ProductUpdateInput(
+                management_role=str(form["management_role"]),
+                comparison_group=str(form["comparison_group"]),
+                lifecycle_status=str(form["lifecycle_status"]),
+            ),
+        )
+        return RedirectResponse(url="/products", status_code=status.HTTP_303_SEE_OTHER)
 
     @app.post("/api/weekly-snapshots", status_code=status.HTTP_201_CREATED)
     def create_weekly_snapshot(payload: SnapshotCreateInput):
@@ -215,8 +239,15 @@ def _extract_holdings_from_form(form) -> list[HoldingInput]:
         holding_return_rate_percent = _holding_return_rate(amount, holding_cost_amount)
         holdings.append(
             HoldingInput(
+                product_id=(
+                    int(form[f"product_id_{index}"])
+                    if str(form.get(f"product_id_{index}", "")).strip()
+                    else None
+                ),
                 product_name=product_name,
                 account_type=str(form.get(f"account_type_{index}", "")).strip() or "普通账户",
+                management_role=str(form.get(f"management_role_{index}", "")) or None,
+                comparison_group=str(form.get(f"comparison_group_{index}", "")) or None,
                 amount=amount,
                 allocation_percent=_parse_float(form.get(f"allocation_percent_{index}", 0)),
                 category=category,
@@ -304,6 +335,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
             "notes": "",
             "holdings": [
                 {
+                    "product_id": "",
                     "product_name": "",
                     "account_type": "普通账户",
                     "amount": "",
@@ -347,6 +379,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
         "notes": "" if copy_as_new else snapshot.notes,
         "holdings": [
             {
+                "product_id": holding.product_id,
                 "product_name": holding.product_name,
                 "account_type": holding.account_type,
                 "amount": holding.amount,

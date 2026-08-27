@@ -9,6 +9,12 @@
   <body>
     <div class="page-shell">
       <main class="layout">
+        <nav class="top-nav">
+          <a href="/" class="active">录入复盘</a>
+          <a href="/analysis">趋势观察</a>
+          <a href="/products">产品设置</a>
+        </nav>
+
         <section class="hero-panel">
           <div class="hero-copy">
             <p class="eyebrow">Portfolio Review</p>
@@ -431,6 +437,7 @@
                       <button type="button" class="ghost-button danger-button remove-holding-button" {% if row == 0 %}disabled{% endif %}>删除</button>
                     </div>
                     <div class="field-grid holding-grid">
+                      <input type="hidden" name="product_id_{{ row }}" value="{{ holding.product_id or '' }}" />
                       <label class="span-2">
                         <span>产品名称</span>
                         <input type="text" name="product_name_{{ row }}" value="{{ holding.product_name }}" required />
@@ -443,6 +450,31 @@
                           {% endfor %}
                         </select>
                       </label>
+                      {% if not holding.product_id %}
+                        <label>
+                          <span>管理角色</span>
+                          <select name="management_role_{{ row }}">
+                            <option value="active_watch">主动观察</option>
+                            <option value="long_term">长期持有</option>
+                            <option value="stable">稳定资产</option>
+                            <option value="liquidity">流动性</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>比较分组</span>
+                          <select name="comparison_group_{{ row }}">
+                            <option value="other">其他</option>
+                            <option value="broad">宽基</option>
+                            <option value="star50">科创</option>
+                            <option value="hang_seng">恒生</option>
+                          </select>
+                        </label>
+                      {% else %}
+                        <div class="product-profile-link span-2">
+                          <span>产品角色与分组</span>
+                          <a href="/products" class="inline-link">已绑定产品档案 · 前往产品设置</a>
+                        </div>
+                      {% endif %}
                       <label>
                         <span>金额</span>
                         <input type="number" step="0.01" min="0" name="amount_{{ row }}" value="{{ holding.amount }}" class="holding-amount-input" required />
@@ -626,6 +658,7 @@
           <button type="button" class="ghost-button danger-button remove-holding-button">删除</button>
         </div>
         <div class="field-grid holding-grid">
+          <input type="hidden" name="product_id___INDEX__" value="" />
           <label class="span-2">
             <span>产品名称</span>
             <input type="text" name="product_name___INDEX__" required />
@@ -636,6 +669,24 @@
               {% for option in account_type_options %}
                 <option value="{{ option }}">{{ option }}</option>
               {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>管理角色</span>
+            <select name="management_role___INDEX__">
+              <option value="active_watch">主动观察</option>
+              <option value="long_term">长期持有</option>
+              <option value="stable">稳定资产</option>
+              <option value="liquidity">流动性</option>
+            </select>
+          </label>
+          <label>
+            <span>比较分组</span>
+            <select name="comparison_group___INDEX__">
+              <option value="other">其他</option>
+              <option value="broad">宽基</option>
+              <option value="star50">科创</option>
+              <option value="hang_seng">恒生</option>
             </select>
           </label>
           <label>
