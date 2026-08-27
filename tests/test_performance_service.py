@@ -46,6 +46,34 @@ class PerformanceServiceTests(unittest.TestCase):
             )
         )
 
+    def add_product_return_history(self, returns: list[float]) -> None:
+        for index, period_return in enumerate([0.0, *returns]):
+            pnl = period_return * 100000
+            self.portfolios.create_snapshot(
+                SnapshotCreateInput(
+                    snapshot_date=str(
+                        date(2026, 5, 1) + timedelta(days=7 * index)
+                    ),
+                    total_assets=100000,
+                    cash_balance=0,
+                    weekly_return_amount=pnl,
+                    external_net_flow_amount=0,
+                    external_flow_confirmed=True,
+                    holdings=[
+                        HoldingInput(
+                            product_name="观察宽基",
+                            account_type="普通账户",
+                            amount=100000,
+                            allocation_percent=100,
+                            category="equity",
+                            weekly_pnl_amount=pnl,
+                            management_role="active_watch",
+                            comparison_group="broad",
+                        )
+                    ],
+                )
+            )
+
     def test_builds_portfolio_and_active_product_metrics(self) -> None:
         for index in range(13):
             self.add_snapshot(index, 100000 + index * 1000)
@@ -61,6 +89,137 @@ class PerformanceServiceTests(unittest.TestCase):
             result["active_products"][0]["confirmed_state"],
             {"up", "sideways"},
         )
+
+    def test_inferred_flow_uses_estimated_value_and_quality_message(self) -> None:
+        for snapshot_date, total_assets, pnl, flow, confirmed in (
+            ("2026-05-01", 100000, 0, 0, True),
+            ("2026-05-08", 106000, 1000, None, False),
+        ):
+            self.portfolios.create_snapshot(
+                SnapshotCreateInput(
+                    snapshot_date=snapshot_date,
+                    total_assets=total_assets,
+                    cash_balance=total_assets,
+                    weekly_return_amount=pnl,
+                    external_net_flow_amount=flow,
+                    external_flow_confirmed=confirmed,
+                    holdings=[
+                        HoldingInput(
+                            product_name="现金",
+                            account_type="货币/现金账户",
+                            amount=total_assets,
+                            allocation_percent=100,
+                            category="cash",
+                        )
+                    ],
+                )
+            )
+
+        portfolio = PerformanceService(self.database).get_analysis()["portfolio"]
+
+        self.assertEqual(portfolio["latest_flow"], 5000)
+        self.assertEqual(portfolio["latest_flow_source"], "estimated")
+        self.assertEqual(
+            portfolio["quality"],
+            ["2026-05-08 外部净资金流尚未确认"],
+        )
+
+    def test_stored_unconfirmed_flow_keeps_value_and_estimated_quality(self) -> None:
+        for snapshot_date, total_assets, pnl, flow, confirmed in (
+            ("2026-05-01", 100000, 0, 0, True),
+            ("2026-05-08", 106000, 1000, 2500, False),
+        ):
+            self.portfolios.create_snapshot(
+                SnapshotCreateInput(
+                    snapshot_date=snapshot_date,
+                    total_assets=total_assets,
+                    cash_balance=total_assets,
+                    weekly_return_amount=pnl,
+                    external_net_flow_amount=flow,
+                    external_flow_confirmed=confirmed,
+                    holdings=[
+                        HoldingInput(
+                            product_name="现金",
+                            account_type="货币/现金账户",
+                            amount=total_assets,
+                            allocation_percent=100,
+                            category="cash",
+                        )
+                    ],
+                )
+            )
+
+        portfolio = PerformanceService(self.database).get_analysis()["portfolio"]
+
+        self.assertEqual(portfolio["latest_flow"], 2500)
+        self.assertEqual(portfolio["latest_flow_source"], "estimated")
+        self.assertEqual(
+            portfolio["quality"],
+            ["2026-05-08 外部净资金流尚未确认"],
+        )
+
+    def test_adjacent_product_period_with_non_positive_denominator_is_unavailable(
+        self,
+    ) -> None:
+        for snapshot_date, amount, transaction, flow in (
+            ("2026-05-01", 10000, 0, 0),
+            ("2026-05-08", 1000, -20000, -9000),
+        ):
+            self.portfolios.create_snapshot(
+                SnapshotCreateInput(
+                    snapshot_date=snapshot_date,
+                    total_assets=amount,
+                    cash_balance=0,
+                    weekly_return_amount=0,
+                    external_net_flow_amount=flow,
+                    external_flow_confirmed=True,
+                    holdings=[
+                        HoldingInput(
+                            product_name="观察宽基",
+                            account_type="普通账户",
+                            amount=amount,
+                            allocation_percent=100,
+                            category="equity",
+                            transaction_amount=transaction,
+                            management_role="active_watch",
+                            comparison_group="broad",
+                        )
+                    ],
+                )
+            )
+
+        product = PerformanceService(self.database).get_analysis()[
+            "active_products"
+        ][0]
+
+        self.assertEqual(product["data_status"], "unavailable")
+        self.assertIsNone(product["returns"][4])
+
+    def test_replays_candidate_history_at_each_endpoint(self) -> None:
+        self.add_product_return_history([0.02] * 9 + [-0.08])
+
+        product = PerformanceService(self.database).get_analysis()[
+            "active_products"
+        ][0]
+
+        self.assertEqual(product["candidate_state"], "turning")
+        self.assertEqual(product["candidate_detail"], "strong_to_weak")
+        self.assertEqual(product["confirmed_state"], "up")
+        self.assertEqual(product["confirmed_detail"], "")
+        self.assertTrue(product["pending"])
+
+    def test_confirmed_turning_state_keeps_direction_detail(self) -> None:
+        self.add_product_return_history([0.02] * 9 + [-0.08, 0.0])
+
+        product = PerformanceService(self.database).get_analysis()[
+            "active_products"
+        ][0]
+
+        self.assertEqual(product["candidate_state"], "turning")
+        self.assertEqual(product["candidate_detail"], "strong_to_weak")
+        self.assertEqual(product["confirmed_state"], "turning")
+        self.assertEqual(product["confirmed_detail"], "strong_to_weak")
+        self.assertFalse(product["pending"])
 
     def test_long_term_has_metrics_but_no_state(self) -> None:
         for index in range(9):

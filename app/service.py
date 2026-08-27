@@ -573,6 +573,14 @@ class PortfolioService:
             })
 
         for holding in latest.holdings:
+            if holding.product_id is None:
+                issues.append({
+                    "type": "product_unmapped",
+                    "severity": "warning",
+                    "message": f"持仓 '{holding.product_name}' 尚未绑定产品档案",
+                    "details": {"product_name": holding.product_name},
+                })
+
             exposure_total = (
                 holding.exposure_equity_percent
                 + holding.exposure_fixed_income_percent
@@ -606,6 +614,14 @@ class PortfolioService:
                         "implied_cost": implied_cost,
                     },
                 })
+
+        if len(snapshots) >= 2 and not latest.external_flow_confirmed:
+            issues.append({
+                "type": "external_flow_unconfirmed",
+                "severity": "info",
+                "message": "本期外部净资金流仍为系统估算",
+                "details": {"snapshot_date": latest.snapshot_date},
+            })
 
         return {
             "available": True,

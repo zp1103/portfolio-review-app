@@ -92,6 +92,10 @@
                 {% elif issue.type == 'exposure_sum_invalid' %}
                 <p>持仓：<strong>{{ issue.details.product_name }}</strong></p>
                 <p class="data-quality-detail">穿透比例合计：<strong>{{ '%.2f'|format(issue.details.exposure_sum) }}%</strong>（应为 {{ issue.details.expected }}%）</p>
+                {% elif issue.type == 'product_unmapped' %}
+                <p>持仓：<strong>{{ issue.details.product_name }}</strong></p>
+                {% elif issue.type == 'external_flow_unconfirmed' %}
+                <p>快照日期：<strong>{{ issue.details.snapshot_date }}</strong></p>
                 {% endif %}
               </div>
             </article>

@@ -250,11 +250,16 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(page.status_code, 200)
         self.assertIn("中证全指组合包", page.text)
+        self.assertIn('value="active_watch" selected', page.text)
+        self.assertIn('value="other" selected', page.text)
+        historical_holding = self.client.get(
+            "/api/weekly-snapshots"
+        ).json()[0]["holdings"][0]
 
         response = self.client.post(
             f"/products/{product_id}",
             data={
-                "management_role": "active_watch",
+                "management_role": "long_term",
                 "comparison_group": "broad",
                 "lifecycle_status": "planned_exit",
             },
@@ -263,7 +268,13 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 303)
         updated = self.client.get("/products")
+        self.assertIn('value="long_term" selected', updated.text)
+        self.assertIn('value="broad" selected', updated.text)
         self.assertIn('value="planned_exit" selected', updated.text)
+        updated_holding = self.client.get(
+            "/api/weekly-snapshots"
+        ).json()[0]["holdings"][0]
+        self.assertEqual(updated_holding, historical_holding)
 
     def test_dashboard_page_contains_snapshot_form(self) -> None:
         response = self.client.get("/")
@@ -284,6 +295,17 @@ class ApiTests(unittest.TestCase):
         self.assertIn('name="cumulative_pnl_amount_0"', response.text)
         self.assertIn('name="exposure_equity_percent_0"', response.text)
         self.assertIn("底层穿透比例", response.text)
+
+    def test_dynamic_holding_row_template_contains_product_metadata_fields(self) -> None:
+        response = self.client.get("/")
+
+        template = response.text.split(
+            '<template id="holding-row-template">', 1
+        )[1].split("</template>", 1)[0]
+
+        self.assertIn('name="product_id___INDEX__"', template)
+        self.assertIn('name="management_role___INDEX__"', template)
+        self.assertIn('name="comparison_group___INDEX__"', template)
 
     def test_new_weekly_form_sets_product_role_and_group(self) -> None:
         page = self.client.get("/")
