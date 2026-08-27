@@ -498,6 +498,27 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.flow-confirmation {
+  align-content: start;
+}
+
+.checkbox-row {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 45, 68, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 500;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
 .holding-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

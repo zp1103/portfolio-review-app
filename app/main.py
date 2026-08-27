@@ -67,6 +67,12 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
             editing_snapshot = service.get_snapshot(edit_id)
         elif copy_id is not None:
             copying_snapshot = service.get_snapshot(copy_id)
+        if copying_snapshot is not None:
+            previous_total_assets = copying_snapshot.total_assets
+        elif editing_snapshot is not None:
+            previous_total_assets = service.get_previous_total_assets(edit_id)
+        else:
+            previous_total_assets = service.get_previous_total_assets()
         form_values = _build_form_values(
             editing_snapshot or copying_snapshot,
             copy_as_new=copying_snapshot is not None,
@@ -89,6 +95,7 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
                 "form_values": form_values,
                 "editing_snapshot": editing_snapshot,
                 "copying_snapshot": copying_snapshot,
+                "previous_total_assets": previous_total_assets,
             },
         )
 
@@ -111,6 +118,10 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
             cash_balance=_sum_cash_balance(holdings),
             weekly_return_amount=_sum_weekly_pnl(holdings),
             ytd_return_amount=_sum_cumulative_pnl(holdings),
+            external_net_flow_amount=_parse_optional_float(
+                form.get("external_net_flow_amount", "")
+            ),
+            external_flow_confirmed=form.get("external_flow_confirmed") == "1",
             data_cutoff_notes=str(form.get("data_cutoff_notes", "")),
             notes=str(form.get("notes", "")),
             holdings=holdings,
@@ -287,6 +298,8 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
             "cash_balance": "",
             "weekly_return_amount": 0,
             "ytd_return_amount": 0,
+            "external_net_flow_amount": "",
+            "external_flow_confirmed": False,
             "data_cutoff_notes": "",
             "notes": "",
             "holdings": [
@@ -324,6 +337,12 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
         "cash_balance": snapshot.cash_balance,
         "weekly_return_amount": 0 if copy_as_new else snapshot.weekly_return_amount,
         "ytd_return_amount": 0 if copy_as_new else snapshot.ytd_return_amount,
+        "external_net_flow_amount": (
+            "" if copy_as_new else snapshot.external_net_flow_amount
+        ),
+        "external_flow_confirmed": (
+            False if copy_as_new else snapshot.external_flow_confirmed
+        ),
         "data_cutoff_notes": "" if copy_as_new else snapshot.data_cutoff_notes,
         "notes": "" if copy_as_new else snapshot.notes,
         "holdings": [

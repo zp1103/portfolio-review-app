@@ -297,6 +297,35 @@ class ApiTests(unittest.TestCase):
             ["buy", "sell", "rebalance"],
         )
 
+    def test_snapshot_form_persists_confirmed_external_flow(self) -> None:
+        response = self.client.post(
+            "/snapshots",
+            data={
+                "snapshot_date": "2026-08-21",
+                "external_net_flow_amount": "8000",
+                "external_flow_confirmed": "1",
+                "product_name_0": "现金",
+                "account_type_0": "货币/现金账户",
+                "amount_0": "110000",
+                "allocation_percent_0": "100",
+                "category_0": "cash",
+                "action_0": "hold",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        snapshot = self.client.get("/api/weekly-snapshots").json()[0]
+        self.assertEqual(snapshot["external_net_flow_amount"], 8000)
+        self.assertTrue(snapshot["external_flow_confirmed"])
+
+        copied = self.client.get(f"/?copy_id={snapshot['id']}")
+        self.assertIn('name="external_net_flow_amount" value=""', copied.text)
+        self.assertNotIn(
+            'name="external_flow_confirmed" value="1" checked',
+            copied.text,
+        )
+
     def test_form_submission_derives_pnl_from_previous_snapshot_and_transaction(self) -> None:
         response = self.client.post(
             "/snapshots",

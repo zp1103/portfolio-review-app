@@ -57,6 +57,8 @@ class SnapshotCreateInput(BaseModel):
     cash_balance: float = Field(ge=0)
     weekly_return_amount: float = 0
     ytd_return_amount: float = 0
+    external_net_flow_amount: float | None = None
+    external_flow_confirmed: bool = False
     data_cutoff_notes: str = ""
     notes: str = ""
     holdings: list[HoldingInput] = Field(default_factory=list)
@@ -74,6 +76,8 @@ class SnapshotRecord(BaseModel):
     cash_balance: float
     weekly_return_amount: float
     ytd_return_amount: float
+    external_net_flow_amount: float | None
+    external_flow_confirmed: bool
     data_cutoff_notes: str
     notes: str
     holdings: list[HoldingRecord] = Field(default_factory=list)
@@ -102,6 +106,12 @@ def snapshot_from_row(row: Mapping[str, object], holdings: list[HoldingRecord]) 
         cash_balance=float(row["cash_balance"]),
         weekly_return_amount=float(row["weekly_return_amount"]),
         ytd_return_amount=float(row["ytd_return_amount"]),
+        external_net_flow_amount=(
+            float(row["external_net_flow_amount"])
+            if row["external_net_flow_amount"] is not None
+            else None
+        ),
+        external_flow_confirmed=bool(row["external_flow_confirmed"]),
         data_cutoff_notes=str(row["data_cutoff_notes"] or ""),
         notes=str(row["notes"] or ""),
         holdings=holdings,

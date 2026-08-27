@@ -53,9 +53,11 @@ class PortfolioService:
                     cash_balance,
                     weekly_return_amount,
                     ytd_return_amount,
+                    external_net_flow_amount,
+                    external_flow_confirmed,
                     data_cutoff_notes,
                     notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.snapshot_date,
@@ -63,6 +65,8 @@ class PortfolioService:
                     payload.cash_balance,
                     payload.weekly_return_amount,
                     payload.ytd_return_amount,
+                    payload.external_net_flow_amount,
+                    payload.external_flow_confirmed,
                     payload.data_cutoff_notes,
                     payload.notes,
                 ),
@@ -90,6 +94,8 @@ class PortfolioService:
                     cash_balance = ?,
                     weekly_return_amount = ?,
                     ytd_return_amount = ?,
+                    external_net_flow_amount = ?,
+                    external_flow_confirmed = ?,
                     data_cutoff_notes = ?,
                     notes = ?
                 WHERE id = ?
@@ -100,6 +106,8 @@ class PortfolioService:
                     payload.cash_balance,
                     payload.weekly_return_amount,
                     payload.ytd_return_amount,
+                    payload.external_net_flow_amount,
+                    payload.external_flow_confirmed,
                     payload.data_cutoff_notes,
                     payload.notes,
                     snapshot_id,
@@ -353,7 +361,21 @@ class PortfolioService:
 
         latest = snapshots[0]
         previous = snapshots[1]
-        net_flow = round(latest.total_assets - previous.total_assets - latest.weekly_return_amount, 2)
+        inferred = round(
+            latest.total_assets - previous.total_assets - latest.weekly_return_amount,
+            2,
+        )
+        net_flow = (
+            latest.external_net_flow_amount
+            if latest.external_net_flow_amount is not None
+            else inferred
+        )
+        source = (
+            "confirmed"
+            if latest.external_flow_confirmed
+            and latest.external_net_flow_amount is not None
+            else "estimated"
+        )
         if net_flow > 0:
             direction = "inflow"
             formula_text = f"较上一期推算净流入 {net_flow:.2f}"
@@ -373,8 +395,29 @@ class PortfolioService:
             "latest_total_assets": latest.total_assets,
             "previous_total_assets": previous.total_assets,
             "weekly_return_amount": latest.weekly_return_amount,
+            "source": source,
             "formula_text": formula_text,
         }
+
+    def get_previous_total_assets(self, snapshot_id: int | None = None) -> float | None:
+        with self.database.session() as connection:
+            if snapshot_id is None:
+                row = connection.execute(
+                    "SELECT total_assets FROM weekly_snapshots "
+                    "ORDER BY snapshot_date DESC LIMIT 1"
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT total_assets FROM weekly_snapshots
+                    WHERE snapshot_date < (
+                        SELECT snapshot_date FROM weekly_snapshots WHERE id = ?
+                    )
+                    ORDER BY snapshot_date DESC LIMIT 1
+                    """,
+                    (snapshot_id,),
+                ).fetchone()
+        return float(row["total_assets"]) if row is not None else None
 
     def _get_holdings_for_snapshot(self, connection, snapshot_id: int) -> list[HoldingRecord]:
         rows = connection.execute(

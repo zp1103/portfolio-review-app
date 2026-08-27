@@ -351,6 +351,22 @@ class PortfolioServiceTests(unittest.TestCase):
         self.assertEqual(cashflow["direction"], "inflow")
         self.assertIn("净流入 12000.00", cashflow["formula_text"])
 
+    def test_snapshot_uses_confirmed_external_flow(self) -> None:
+        snapshot = self.service.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-08-21",
+                total_assets=110000,
+                cash_balance=10000,
+                weekly_return_amount=2000,
+                external_net_flow_amount=8000,
+                external_flow_confirmed=True,
+                holdings=[],
+            )
+        )
+
+        self.assertEqual(snapshot.external_net_flow_amount, 8000)
+        self.assertTrue(snapshot.external_flow_confirmed)
+
     def test_lookthrough_analysis_uses_holding_exposure_percentages(self) -> None:
         self.service.create_snapshot(
             SnapshotCreateInput(

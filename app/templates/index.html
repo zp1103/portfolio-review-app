@@ -386,6 +386,22 @@
                   <span>年内收益</span>
                   <input type="number" step="0.01" name="ytd_return_amount" id="ytd-return-input" value="{{ form_values.ytd_return_amount }}" readonly />
                 </label>
+                <label>
+                  <span>外部净资金流</span>
+                  <input type="number" step="0.01" id="external-net-flow-input"
+                         name="external_net_flow_amount" value="{{ form_values.external_net_flow_amount }}" />
+                </label>
+                <label class="flow-confirmation">
+                  <span>资金流口径</span>
+                  <span class="checkbox-row">
+                    <input type="checkbox" name="external_flow_confirmed" value="1"
+                           id="external-flow-confirmed"
+                           {% if form_values.external_flow_confirmed %}checked{% endif %} />
+                    已核对本期净转入/转出
+                  </span>
+                </label>
+                <input type="hidden" id="previous-total-assets"
+                       value="{{ previous_total_assets if previous_total_assets is not none else '' }}" />
                 <label class="full-width">
                   <span>数据截止说明</span>
                   <input type="text" name="data_cutoff_notes" value="{{ form_values.data_cutoff_notes }}" placeholder="例如：普通账户到周五，第三方到账周四，养老金到账周三；正式周收益统一按周三口径。" />
@@ -732,7 +748,20 @@
       const weeklyReturnInput = document.getElementById("weekly-return-input");
       const weeklyReturnRateInput = document.getElementById("weekly-return-rate-input");
       const ytdReturnInput = document.getElementById("ytd-return-input");
+      const externalFlowInput = document.getElementById("external-net-flow-input");
+      const externalFlowConfirmed = document.getElementById("external-flow-confirmed");
+      const previousTotalAssetsInput = document.getElementById("previous-total-assets");
       let rowIndex = holdingsContainer.querySelectorAll(".holding-row").length;
+
+      function recalculateExternalFlow() {
+        if (!externalFlowInput || externalFlowConfirmed?.checked) return;
+        const previous = Number(previousTotalAssetsInput?.value || NaN);
+        const total = Number(totalAssetsInput?.value || 0);
+        const pnl = Number(weeklyReturnInput?.value || 0);
+        externalFlowInput.value = Number.isFinite(previous)
+          ? (total - previous - pnl).toFixed(2)
+          : "";
+      }
 
       function bindRemoveButtons() {
         holdingsContainer.querySelectorAll(".remove-holding-button").forEach((button) => {
@@ -915,6 +944,7 @@
         recalculateWeeklyReturn();
         recalculateHoldingCumulativeMetrics();
         recalculateHoldingCostMetrics();
+        recalculateExternalFlow();
       }
 
       function bindAmountInputs() {
@@ -948,6 +978,7 @@
           weeklyReturnRateInput.value = totalAssets > 0 ? ((total / totalAssets) * 100).toFixed(2) : "";
         }
         recalculateHoldingWeeklyReturnRates();
+        recalculateExternalFlow();
       }
 
       function bindWeeklyPnlInputs() {
