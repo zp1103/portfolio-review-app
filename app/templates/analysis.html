@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>趋势观察 · 资产复盘系统</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260827-trend-cards" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260827-nav-chart" />
   </head>
   <body>
     <div class="page-shell">
@@ -59,14 +59,57 @@
               </article>
             </div>
             <div class="chart-heading">
-              <div>
-                <strong>资金流调整净值</strong>
-                <span>起始估算净值 1000</span>
+              <div class="chart-title">
+                <strong>扣除资金进出后的组合表现</strong>
+                <span>只反映投资盈亏，转入或转出资金不会直接推高或压低曲线</span>
+              </div>
+              <div class="chart-nav-summary">
+                <span>估算净值</span>
+                <strong>
+                  {{ '%.2f'|format(analysis.portfolio.start_nav) }}
+                  <i aria-hidden="true">→</i>
+                  {{ '%.2f'|format(analysis.portfolio.latest_nav) }}
+                </strong>
               </div>
             </div>
-            <svg class="nav-chart" viewBox="0 0 1000 260" role="img" aria-label="估算资金流调整净值">
-              <polyline points="{{ analysis.portfolio.chart_points }}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke" />
-            </svg>
+            {% set chart_start = analysis.portfolio.chart_landmarks.start %}
+            {% set chart_high = analysis.portfolio.chart_landmarks.high %}
+            {% set chart_latest = analysis.portfolio.chart_landmarks.latest %}
+            <div class="nav-chart-frame">
+              <svg class="nav-chart" viewBox="0 0 1000 260" role="img" aria-label="扣除资金进出后的组合估算净值曲线">
+                {% for tick in analysis.portfolio.chart_axis_ticks %}
+                  <line class="chart-grid-line" x1="72" x2="980" y1="{{ '%.2f'|format(tick.y) }}" y2="{{ '%.2f'|format(tick.y) }}" />
+                  <text class="chart-axis-label" x="10" y="{{ '%.2f'|format(tick.y + 5) }}">{{ '%.0f'|format(tick.value) }}</text>
+                {% endfor %}
+                <polyline class="chart-series" points="{{ analysis.portfolio.chart_points }}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke" />
+                <circle class="chart-marker chart-marker-start" cx="{{ '%.2f'|format(chart_start.x) }}" cy="{{ '%.2f'|format(chart_start.y) }}" r="7" />
+                {% if chart_high.date != chart_start.date and chart_high.date != chart_latest.date %}
+                  <circle class="chart-marker chart-marker-high" cx="{{ '%.2f'|format(chart_high.x) }}" cy="{{ '%.2f'|format(chart_high.y) }}" r="7" />
+                {% endif %}
+                <circle class="chart-marker chart-marker-latest" cx="{{ '%.2f'|format(chart_latest.x) }}" cy="{{ '%.2f'|format(chart_latest.y) }}" r="8" />
+              </svg>
+              <div class="chart-date-axis" aria-hidden="true">
+                <span>{{ chart_start.date }}</span>
+                <span>{{ chart_latest.date }}</span>
+              </div>
+            </div>
+            <div class="chart-landmarks">
+              <div>
+                <span><i class="landmark-dot start-dot"></i>起点</span>
+                <strong>{{ '%.2f'|format(chart_start.nav) }}</strong>
+                <small>{{ chart_start.date }}</small>
+              </div>
+              <div>
+                <span><i class="landmark-dot high-dot"></i>阶段高点</span>
+                <strong>{{ '%.2f'|format(chart_high.nav) }}</strong>
+                <small>{{ chart_high.date }}</small>
+              </div>
+              <div>
+                <span><i class="landmark-dot latest-dot"></i>当前</span>
+                <strong>{{ '%.2f'|format(chart_latest.nav) }}</strong>
+                <small>距高点 {{ '%.2f'|format(analysis.portfolio.current_drawdown * 100) }}%</small>
+              </div>
+            </div>
           {% else %}
             <div class="empty-history">
               {% if analysis.portfolio.nav_points|length < 2 %}

@@ -22,18 +22,40 @@ from app.product_service import ProductService
 from app.service import PortfolioService
 
 
-def _chart_coordinates(nav_values: list[float]) -> list[tuple[float, float]]:
-    if len(nav_values) == 1:
-        return [(20.0, 130.0)]
+def _chart_layout(
+    nav_values: list[float],
+) -> tuple[list[tuple[float, float]], list[dict[str, float]]]:
+    plot_left, plot_right = 82.0, 970.0
+    plot_top, plot_bottom = 30.0, 230.0
     low, high = min(nav_values), max(nav_values)
-    span = high - low
-    return [
-        (
-            20 + index * 960 / (len(nav_values) - 1),
-            130.0 if span == 0 else 230 - (nav - low) * 200 / span,
-        )
-        for index, nav in enumerate(nav_values)
+    midpoint = (low + high) / 2
+    observed_span = high - low
+    minimum_span = max(abs(nav_values[0]) * 0.1, 1.0)
+    visible_span = max(observed_span * 1.2, minimum_span)
+    visible_low = midpoint - visible_span / 2
+    visible_high = midpoint + visible_span / 2
+
+    if len(nav_values) == 1:
+        coordinates = [(plot_left, (plot_top + plot_bottom) / 2)]
+    else:
+        coordinates = [
+            (
+                plot_left
+                + index * (plot_right - plot_left) / (len(nav_values) - 1),
+                plot_bottom
+                - (nav - visible_low)
+                * (plot_bottom - plot_top)
+                / visible_span,
+            )
+            for index, nav in enumerate(nav_values)
+        ]
+
+    axis_ticks = [
+        {"value": visible_high, "y": plot_top},
+        {"value": midpoint, "y": (plot_top + plot_bottom) / 2},
+        {"value": visible_low, "y": plot_bottom},
     ]
+    return coordinates, axis_ticks
 
 
 class PerformanceService:
@@ -136,7 +158,7 @@ class PerformanceService:
 
         nav_values = chain_nav(period_returns, 1000)
         valid_nav = [value for value in nav_values if value is not None]
-        coordinates = _chart_coordinates(valid_nav)
+        coordinates, chart_axis_ticks = _chart_layout(valid_nav)
         nav_points = []
         coordinate_index = 0
         for snapshot, nav in zip(snapshots, nav_values, strict=True):
@@ -171,6 +193,10 @@ class PerformanceService:
             ),
             None,
         )
+        valid_points = [point for point in nav_points if point["nav"] is not None]
+        start_point = valid_points[0]
+        latest_point = valid_points[-1]
+        high_point = max(valid_points, key=lambda point: point["nav"])
         return {
             "available": current_metrics_available,
             "nav_points": nav_points,
@@ -179,6 +205,15 @@ class PerformanceService:
                 for point in nav_points
                 if point["nav"] is not None
             ),
+            "chart_axis_ticks": chart_axis_ticks,
+            "chart_landmarks": {
+                "start": start_point,
+                "high": high_point,
+                "latest": latest_point,
+            },
+            "start_nav": start_point["nav"],
+            "latest_nav": latest_point["nav"],
+            "high_nav": high_point["nav"],
             "cumulative_return": (
                 valid_nav[-1] / valid_nav[0] - 1
                 if current_metrics_available

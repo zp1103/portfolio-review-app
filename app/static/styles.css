@@ -1095,6 +1095,34 @@ textarea {
   gap: 5px;
 }
 
+.chart-title {
+  max-width: 620px;
+}
+
+.chart-title strong {
+  font-size: 1.04rem;
+}
+
+.chart-nav-summary {
+  justify-items: end;
+  flex: 0 0 auto;
+}
+
+.chart-nav-summary span {
+  font-size: 0.8rem;
+}
+
+.chart-nav-summary strong {
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-nav-summary i {
+  margin: 0 5px;
+  color: var(--accent);
+  font-style: normal;
+}
+
 .latest-flow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1137,14 +1165,110 @@ textarea {
   background: var(--accent-soft);
 }
 
-.nav-chart {
-  width: 100%;
-  min-height: 220px;
-  color: var(--accent);
-  background:
-    linear-gradient(rgba(37, 45, 68, 0.045) 1px, transparent 1px) 0 0 / 100% 25%,
-    var(--surface-muted);
+.nav-chart-frame {
+  overflow: hidden;
   border-radius: var(--radius-lg);
+  background: var(--surface-muted);
+  border: 1px solid rgba(37, 45, 68, 0.06);
+}
+
+.nav-chart {
+  display: block;
+  width: 100%;
+  min-height: 210px;
+  color: var(--accent);
+}
+
+.chart-grid-line {
+  stroke: rgba(37, 45, 68, 0.09);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-series {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-marker {
+  stroke: var(--surface-strong);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-marker-start {
+  fill: var(--ink);
+}
+
+.chart-marker-high {
+  fill: #d39a45;
+}
+
+.chart-marker-latest {
+  fill: var(--accent);
+}
+
+.chart-date-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 14px 12px 62px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-landmarks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.chart-landmarks > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(37, 45, 68, 0.035);
+}
+
+.chart-landmarks span {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.chart-landmarks strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-landmarks small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.landmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.high-dot {
+  background: #d39a45;
+}
+
+.latest-dot {
+  background: var(--accent);
 }
 
 .analysis-quality {
@@ -1519,6 +1643,14 @@ textarea {
   .trend-card > header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .chart-nav-summary {
+    justify-items: start;
+  }
+
+  .chart-landmarks {
+    grid-template-columns: 1fr;
   }
 
   .latest-flow {

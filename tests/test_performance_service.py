@@ -90,6 +90,25 @@ class PerformanceServiceTests(unittest.TestCase):
             {"up", "sideways"},
         )
 
+    def test_exposes_readable_chart_summary_landmarks_and_padded_scale(self) -> None:
+        self.add_snapshot(0, 100000, pnl=0)
+        self.add_snapshot(1, 110000, pnl=10000)
+        self.add_snapshot(2, 105000, pnl=-5000)
+
+        portfolio = PerformanceService(self.database).get_analysis()["portfolio"]
+
+        self.assertEqual(portfolio["start_nav"], 1000)
+        self.assertEqual(portfolio["latest_nav"], 1050)
+        self.assertEqual(portfolio["high_nav"], 1100)
+        self.assertEqual(portfolio["chart_landmarks"]["start"]["date"], "2026-05-01")
+        self.assertEqual(portfolio["chart_landmarks"]["high"]["date"], "2026-05-08")
+        self.assertEqual(portfolio["chart_landmarks"]["latest"]["date"], "2026-05-15")
+        self.assertEqual(len(portfolio["chart_axis_ticks"]), 3)
+        self.assertGreater(portfolio["chart_landmarks"]["start"]["y"], 30)
+        self.assertLess(portfolio["chart_landmarks"]["start"]["y"], 230)
+        self.assertGreater(portfolio["chart_landmarks"]["high"]["y"], 30)
+        self.assertLess(portfolio["chart_landmarks"]["high"]["y"], 230)
+
     def test_inferred_flow_uses_estimated_value_and_quality_message(self) -> None:
         for snapshot_date, total_assets, pnl, flow, confirmed in (
             ("2026-05-01", 100000, 0, 0, True),
