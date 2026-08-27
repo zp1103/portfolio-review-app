@@ -121,9 +121,19 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
             previous_total_assets = service.get_previous_total_assets(edit_id)
         else:
             previous_total_assets = service.get_previous_total_assets()
+        excluded_copy_product_ids = (
+            {
+                product.id
+                for product in product_service.list_products()
+                if product.lifecycle_status == "exited"
+            }
+            if copying_snapshot is not None
+            else set()
+        )
         form_values = _build_form_values(
             editing_snapshot or copying_snapshot,
             copy_as_new=copying_snapshot is not None,
+            excluded_product_ids=excluded_copy_product_ids,
         )
         return templates.TemplateResponse(
             request=request,
@@ -385,7 +395,11 @@ def _holding_return_rate(amount: float, holding_cost_amount: float) -> float:
     return round(((amount - holding_cost_amount) / holding_cost_amount) * 100, 2)
 
 
-def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
+def _build_form_values(
+    snapshot,
+    copy_as_new: bool = False,
+    excluded_product_ids: set[int] | None = None,
+) -> dict:
     if snapshot is None:
         return {
             "snapshot_id": "",
@@ -427,6 +441,7 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
             ],
         }
 
+    excluded_product_ids = excluded_product_ids or set()
     return {
         "snapshot_id": "" if copy_as_new else snapshot.id,
         "snapshot_date": "" if copy_as_new else snapshot.snapshot_date,
@@ -469,6 +484,11 @@ def _build_form_values(snapshot, copy_as_new: bool = False) -> dict:
                 "notes": holding.notes,
             }
             for holding in snapshot.holdings
+            if not (
+                copy_as_new
+                and holding.product_id is not None
+                and holding.product_id in excluded_product_ids
+            )
         ],
     }
 

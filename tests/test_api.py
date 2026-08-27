@@ -117,6 +117,46 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("动能变化", objective_card)
         self.assertNotIn("确认状态", objective_card)
         self.assertNotIn("证据强度", objective_card)
+        self.assertIn("数据覆盖", objective_card)
+        self.assertIn("2026-06-26 → 2026-08-21", objective_card)
+        self.assertIn("连续有效 8 期", objective_card)
+        self.assertIn("有效截止 2026-08-21", objective_card)
+
+        portfolio_section = response.text.split(
+            '<section class="card performance-card">', 1
+        )[1].split("</section>", 1)[0]
+        self.assertIn("数据覆盖", portfolio_section)
+        self.assertIn("2026-06-26 → 2026-08-21", portfolio_section)
+        self.assertIn("连续有效 8 期", portfolio_section)
+        self.assertIn("有效截止 2026-08-21", portfolio_section)
+
+    def test_ranking_rows_show_localized_group_and_cross_market_context(self) -> None:
+        self._seed_performance_history()
+        latest = self.client.get("/api/weekly-snapshots").json()[0]
+        long_term = next(
+            holding
+            for holding in latest["holdings"]
+            if holding["product_name"] == "养老金中证500增强"
+        )
+        updated = self.client.post(
+            f"/products/{long_term['product_id']}",
+            data={
+                "management_role": "active_watch",
+                "comparison_group": "broad",
+                "lifecycle_status": "active",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(updated.status_code, 303)
+
+        response = self.client.get("/analysis")
+        comparison = response.text.split(
+            '<section class="card comparison-card">', 1
+        )[1].split("</section>", 1)[0]
+
+        self.assertIn("跨市场、跨风格观察池", comparison)
+        self.assertIn('<em class="ranking-group">科创</em>', comparison)
+        self.assertIn('<em class="ranking-group">宽基</em>', comparison)
 
     def test_analysis_page_distinguishes_unavailable_states(self) -> None:
         first = self.client.post(
@@ -375,6 +415,62 @@ class ApiTests(unittest.TestCase):
             copied.text,
             r'(?s)<select name="action_0">.*?'
             r'<option value="hold" selected>持有</option>.*?</select>',
+        )
+
+    def test_copy_draft_excludes_currently_exited_products_but_keeps_history(
+        self,
+    ) -> None:
+        created = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-08-21",
+                "total_assets": 20000,
+                "cash_balance": 0,
+                "holdings": [
+                    {
+                        "product_name": "继续持有产品",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 50,
+                        "category": "equity",
+                    },
+                    {
+                        "product_name": "已退出产品",
+                        "account_type": "普通账户",
+                        "amount": 10000,
+                        "allocation_percent": 50,
+                        "category": "equity",
+                    },
+                ],
+            },
+        ).json()
+        exited = next(
+            holding
+            for holding in created["holdings"]
+            if holding["product_name"] == "已退出产品"
+        )
+        response = self.client.post(
+            f"/products/{exited['product_id']}",
+            data={
+                "management_role": "active_watch",
+                "comparison_group": "other",
+                "lifecycle_status": "exited",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+
+        copied = self.client.get(f"/?copy_id={created['id']}")
+        form = copied.text.split(
+            '<form method="post" action="/snapshots"', 1
+        )[1].split("</form>", 1)[0]
+        history = self.client.get("/api/weekly-snapshots").json()[0]
+
+        self.assertIn('value="继续持有产品"', form)
+        self.assertNotIn('value="已退出产品"', form)
+        self.assertEqual(
+            {holding["product_name"] for holding in history["holdings"]},
+            {"继续持有产品", "已退出产品"},
         )
 
     def test_create_snapshot_endpoint_persists_payload(self) -> None:
@@ -657,6 +753,43 @@ class ApiTests(unittest.TestCase):
             'name="external_flow_confirmed" value="1" checked',
             copied.text,
         )
+
+    def test_dashboard_labels_corrected_flow_without_estimation_formula(self) -> None:
+        for snapshot_date, assets, pnl, flow in (
+            ("2026-08-14", 100000, 0, 0),
+            ("2026-08-21", 110000, 2000, 1234),
+        ):
+            created = self.client.post(
+                "/api/weekly-snapshots",
+                json={
+                    "snapshot_date": snapshot_date,
+                    "total_assets": assets,
+                    "cash_balance": assets,
+                    "weekly_return_amount": pnl,
+                    "external_net_flow_amount": flow,
+                    "external_flow_confirmed": True,
+                    "holdings": [
+                        {
+                            "product_name": "现金",
+                            "account_type": "货币/现金账户",
+                            "amount": assets,
+                            "allocation_percent": 100,
+                            "category": "cash",
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(created.status_code, 201)
+
+        response = self.client.get("/")
+        cashflow = response.text.split(
+            '<section class="card cashflow-card">', 1
+        )[1].split("</section>", 1)[0]
+
+        self.assertIn("+1234.00", cashflow)
+        self.assertIn("已确认/修正", cashflow)
+        self.assertNotIn("本周净资金流 = 本周总资产 - 上期总资产 - 本周收益", cashflow)
+        self.assertNotIn("110000.00", cashflow)
 
     def test_external_flow_script_preserves_persisted_and_manual_values(self) -> None:
         created = self.client.post(
@@ -1067,7 +1200,7 @@ if (externalFlowInput.value !== "7500") {
         self.assertIn("辅助口径", response.text)
         self.assertIn("本周收益归因", response.text)
         self.assertIn("净资金流", response.text)
-        self.assertIn("较上一期推算净流入", response.text)
+        self.assertIn("系统估算净流入", response.text)
         self.assertIn("固收", response.text)
         self.assertIn("现金", response.text)
 

@@ -40,11 +40,8 @@ class PortfolioService:
         self.product_service = ProductService(database)
 
     def create_snapshot(self, payload: SnapshotCreateInput) -> SnapshotRecord:
-        resolved_holdings = [
-            (holding, self.product_service.resolve_product(holding))
-            for holding in payload.holdings
-        ]
         with self.database.session() as connection:
+            resolved_holdings = self._resolve_holdings(connection, payload.holdings)
             cursor = connection.execute(
                 """
                 INSERT INTO weekly_snapshots (
@@ -76,16 +73,17 @@ class PortfolioService:
             for holding, product_id in resolved_holdings:
                 self._insert_holding(connection, snapshot_id, holding, product_id)
 
-            connection.commit()
-            return self.get_snapshot(snapshot_id)
+        return self.get_snapshot(snapshot_id)
 
     def update_snapshot(self, snapshot_id: int, payload: SnapshotCreateInput) -> SnapshotRecord:
-        self.get_snapshot(snapshot_id)
-        resolved_holdings = [
-            (holding, self.product_service.resolve_product(holding))
-            for holding in payload.holdings
-        ]
         with self.database.session() as connection:
+            existing = connection.execute(
+                "SELECT 1 FROM weekly_snapshots WHERE id = ?",
+                (snapshot_id,),
+            ).fetchone()
+            if existing is None:
+                raise ValueError(f"Snapshot {snapshot_id} not found")
+            resolved_holdings = self._resolve_holdings(connection, payload.holdings)
             connection.execute(
                 """
                 UPDATE weekly_snapshots
@@ -117,8 +115,7 @@ class PortfolioService:
             for holding, product_id in resolved_holdings:
                 self._insert_holding(connection, snapshot_id, holding, product_id)
 
-            connection.commit()
-            return self.get_snapshot(snapshot_id)
+        return self.get_snapshot(snapshot_id)
 
     def get_snapshot(self, snapshot_id: int) -> SnapshotRecord:
         with self.database.session() as connection:
@@ -379,15 +376,16 @@ class PortfolioService:
             and latest.external_net_flow_amount is not None
             else "estimated"
         )
+        source_text = "已确认/修正" if source == "confirmed" else "系统估算"
         if net_flow > 0:
             direction = "inflow"
-            formula_text = f"较上一期推算净流入 {net_flow:.2f}"
+            formula_text = f"{source_text}净流入 {net_flow:.2f}"
         elif net_flow < 0:
             direction = "outflow"
-            formula_text = f"较上一期推算净流出 {abs(net_flow):.2f}"
+            formula_text = f"{source_text}净流出 {abs(net_flow):.2f}"
         else:
             direction = "flat"
-            formula_text = "较上一期无明显净资金流"
+            formula_text = f"{source_text}无明显净资金流"
 
         return {
             "available": True,
@@ -398,6 +396,7 @@ class PortfolioService:
             "latest_total_assets": latest.total_assets,
             "previous_total_assets": previous.total_assets,
             "weekly_return_amount": latest.weekly_return_amount,
+            "inferred_flow": inferred,
             "source": source,
             "formula_text": formula_text,
         }
@@ -486,6 +485,23 @@ class PortfolioService:
                 holding.notes,
             ),
         )
+
+    def _resolve_holdings(self, connection, holdings: list[HoldingInput]):
+        resolved = [
+            (
+                holding,
+                self.product_service.resolve_product(holding, connection),
+            )
+            for holding in holdings
+        ]
+        seen: set[int] = set()
+        for _, product_id in resolved:
+            if product_id in seen:
+                raise ValueError(
+                    f"Duplicate product_id {product_id} in one snapshot"
+                )
+            seen.add(product_id)
+        return resolved
 
     def _holding_contribution_item(self, holding: HoldingRecord) -> dict:
         return {
@@ -615,7 +631,11 @@ class PortfolioService:
                     },
                 })
 
-        if len(snapshots) >= 2 and not latest.external_flow_confirmed:
+        effective_flow_confirmed = (
+            latest.external_flow_confirmed
+            and latest.external_net_flow_amount is not None
+        )
+        if len(snapshots) >= 2 and not effective_flow_confirmed:
             issues.append({
                 "type": "external_flow_unconfirmed",
                 "severity": "info",

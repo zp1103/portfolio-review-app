@@ -328,16 +328,18 @@
                 </h3>
                 <p>{{ cashflow_analysis.formula_text }}</p>
               </article>
-              <div class="cashflow-formula">
-                <p>本周净资金流 = 本周总资产 - 上期总资产 - 本周收益</p>
-                <span>
-                  {{ '%.2f'|format(cashflow_analysis.latest_total_assets) }}
-                  -
-                  {{ '%.2f'|format(cashflow_analysis.previous_total_assets) }}
-                  -
-                  {{ '%.2f'|format(cashflow_analysis.weekly_return_amount) }}
-                </span>
-              </div>
+              {% if cashflow_analysis.source == 'estimated' %}
+                <div class="cashflow-formula">
+                  <p>本周净资金流 = 本周总资产 - 上期总资产 - 本周收益</p>
+                  <span>
+                    {{ '%.2f'|format(cashflow_analysis.latest_total_assets) }}
+                    -
+                    {{ '%.2f'|format(cashflow_analysis.previous_total_assets) }}
+                    -
+                    {{ '%.2f'|format(cashflow_analysis.weekly_return_amount) }}
+                  </span>
+                </div>
+              {% endif %}
             </div>
           {% else %}
             <div class="empty-history">

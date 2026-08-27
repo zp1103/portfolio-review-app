@@ -208,6 +208,18 @@ class PerformanceServiceTests(unittest.TestCase):
         self.assertEqual(product["confirmed_detail"], "")
         self.assertTrue(product["pending"])
 
+    def test_first_changed_candidate_after_confirmation_has_low_evidence(self) -> None:
+        self.add_product_return_history([0.02] * 9 + [-0.08])
+
+        product = PerformanceService(self.database).get_analysis()[
+            "active_products"
+        ][0]
+
+        self.assertEqual(product["confirmed_state"], "up")
+        self.assertEqual(product["candidate_state"], "turning")
+        self.assertTrue(product["pending"])
+        self.assertEqual(product["evidence"], "low")
+
     def test_confirmed_turning_state_keeps_direction_detail(self) -> None:
         self.add_product_return_history([0.02] * 9 + [-0.08, 0.0])
 
@@ -238,7 +250,12 @@ class PerformanceServiceTests(unittest.TestCase):
 
         self.assertEqual(result["active_products"], [])
         self.assertEqual(len(result["objective_products"]), 1)
-        self.assertNotIn("confirmed_state", result["objective_products"][0])
+        objective = result["objective_products"][0]
+        self.assertNotIn("confirmed_state", objective)
+        self.assertEqual(objective["coverage_start"], "2026-05-01")
+        self.assertEqual(objective["coverage_end"], "2026-06-26")
+        self.assertEqual(objective["continuous_periods"], 8)
+        self.assertEqual(objective["valid_through"], "2026-06-26")
 
     def test_exited_product_keeps_history_and_leaves_ranking(self) -> None:
         for index in range(9):
@@ -461,6 +478,91 @@ class PerformanceServiceTests(unittest.TestCase):
         self.assertFalse(portfolio["available"])
         self.assertIsNone(portfolio["current_drawdown"])
 
+    def test_latest_invalid_nav_does_not_publish_earlier_prefix_as_current(self) -> None:
+        for snapshot_date, total_assets, pnl, flow in (
+            ("2026-05-01", 100, 0, 0),
+            ("2026-05-08", 101, 1, 0),
+            ("2026-05-15", 1, 1, -202),
+        ):
+            self.portfolios.create_snapshot(
+                SnapshotCreateInput(
+                    snapshot_date=snapshot_date,
+                    total_assets=total_assets,
+                    cash_balance=total_assets,
+                    weekly_return_amount=pnl,
+                    external_net_flow_amount=flow,
+                    external_flow_confirmed=True,
+                    holdings=[
+                        HoldingInput(
+                            product_name="现金",
+                            account_type="货币/现金账户",
+                            amount=total_assets,
+                            allocation_percent=100,
+                            category="cash",
+                        )
+                    ],
+                )
+            )
+
+        portfolio = PerformanceService(self.database).get_analysis()["portfolio"]
+
+        self.assertEqual(
+            [point["nav"] for point in portfolio["nav_points"]],
+            [1000, 1010, None],
+        )
+        self.assertFalse(portfolio["available"])
+        self.assertIsNone(portfolio["cumulative_return"])
+        self.assertIsNone(portfolio["current_drawdown"])
+        self.assertEqual(portfolio["coverage_start"], "2026-05-01")
+        self.assertEqual(portfolio["coverage_end"], "2026-05-15")
+        self.assertEqual(portfolio["continuous_periods"], 1)
+        self.assertEqual(portfolio["valid_through"], "2026-05-08")
+
+    def test_duplicate_product_rows_in_one_snapshot_are_rejected_by_analysis(
+        self,
+    ) -> None:
+        snapshot = self.portfolios.create_snapshot(
+            SnapshotCreateInput(
+                snapshot_date="2026-05-01",
+                total_assets=10000,
+                cash_balance=0,
+                holdings=[
+                    HoldingInput(
+                        product_name="重复产品",
+                        account_type="普通账户",
+                        amount=10000,
+                        allocation_percent=100,
+                        category="equity",
+                    )
+                ],
+            )
+        )
+        holding = snapshot.holdings[0]
+        with self.database.session() as connection:
+            connection.execute(
+                """
+                INSERT INTO holdings (
+                    snapshot_id, product_id, product_name, account_type,
+                    amount, allocation_percent, category
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    snapshot.id,
+                    holding.product_id,
+                    holding.product_name,
+                    holding.account_type,
+                    holding.amount,
+                    holding.allocation_percent,
+                    holding.category,
+                ),
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "duplicate product_id .* snapshot 2026-05-01",
+        ):
+            PerformanceService(self.database).get_analysis()
+
     def test_exited_product_ends_at_its_last_observation(self) -> None:
         for index in range(5):
             self.add_snapshot(index, 100000 + index * 1000)
@@ -546,6 +648,10 @@ class PerformanceServiceTests(unittest.TestCase):
         self.assertEqual(
             {row[0] for row in result["comparison"][4]},
             {"同名产品 · 账户甲", "同名产品 · 账户乙"},
+        )
+        self.assertEqual(
+            {row[3] for row in result["comparison"][4]},
+            {"other"},
         )
         all_products = (
             result["active_products"]

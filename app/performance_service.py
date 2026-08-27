@@ -70,18 +70,19 @@ class PerformanceService:
             for item in product_views
             if item["lifecycle"] == "exited" and item["role"] != "liquidity"
         ]
-        comparison = {
-            period: rank_horizon(
-                [
-                    (
-                        f"{item['name']} · {item['account_type']}",
-                        item["returns"][period],
-                    )
-                    for item in active
-                ]
-            )
-            for period in (4, 8, 12)
-        }
+        comparison = {}
+        for period in (4, 8, 12):
+            values = []
+            groups_by_label = {}
+            for item in active:
+                label = f"{item['name']} · {item['account_type']}"
+                values.append((label, item["returns"][period]))
+                groups_by_label[label] = item["group"]
+            ranked = rank_horizon(values)
+            comparison[period] = [
+                (label, value, rank, groups_by_label[label])
+                for label, value, rank in ranked
+            ]
         return {
             "rule_version": RULE_VERSION,
             "portfolio": self._portfolio_view(snapshots),
@@ -160,8 +161,18 @@ class PerformanceService:
         latest_flow, latest_source = (
             flow_rows[-1] if flow_rows else (None, "unavailable")
         )
+        latest_nav_available = nav_values[-1] is not None
+        current_metrics_available = latest_nav_available and len(valid_nav) >= 2
+        valid_through = next(
+            (
+                point["date"]
+                for point in reversed(nav_points)
+                if point["nav"] is not None
+            ),
+            None,
+        )
         return {
-            "available": len(valid_nav) >= 2,
+            "available": current_metrics_available,
             "nav_points": nav_points,
             "chart_points": " ".join(
                 f"{point['x']:.2f},{point['y']:.2f}"
@@ -170,14 +181,22 @@ class PerformanceService:
             ),
             "cumulative_return": (
                 valid_nav[-1] / valid_nav[0] - 1
-                if len(valid_nav) >= 2
+                if current_metrics_available
                 else None
             ),
-            "current_drawdown": stats.get("current_drawdown"),
+            "current_drawdown": (
+                stats.get("current_drawdown")
+                if current_metrics_available
+                else None
+            ),
             "max_drawdown": stats.get("max_drawdown"),
             "high_date": stats.get("high_date"),
             "latest_flow": latest_flow,
             "latest_flow_source": latest_source,
+            "coverage_start": snapshots[0].snapshot_date,
+            "coverage_end": snapshots[-1].snapshot_date,
+            "continuous_periods": max(len(valid_nav) - 1, 0),
+            "valid_through": valid_through,
             "quality": quality,
         }
 
@@ -189,6 +208,11 @@ class PerformanceService:
         for snapshot_index, snapshot in enumerate(snapshots):
             for holding in snapshot.holdings:
                 if holding.product_id is not None:
+                    if snapshot_index in observations[holding.product_id]:
+                        raise ValueError(
+                            f"duplicate product_id {holding.product_id} in "
+                            f"snapshot {snapshot.snapshot_date}"
+                        )
                     observations[holding.product_id][snapshot_index] = holding
 
         views: list[dict] = []
@@ -286,6 +310,17 @@ class PerformanceService:
                 "momentum": momentum,
                 "streak": streak(continuous_returns),
                 "data_status": data_status,
+                "coverage_start": snapshots[first_index].snapshot_date,
+                "coverage_end": snapshots[end_index].snapshot_date,
+                "continuous_periods": len(continuous_returns),
+                "valid_through": next(
+                    (
+                        return_dates[index]
+                        for index in range(len(returns) - 1, -1, -1)
+                        if returns[index] is not None
+                    ),
+                    None,
+                ),
             }
 
             if (
@@ -324,7 +359,10 @@ class PerformanceService:
                         "confirmed_detail": confirmation.confirmed_detail,
                         "pending": confirmation.pending,
                         "evidence": evidence_strength(
-                            confirmed=confirmation.confirmed is not None,
+                            confirmed=(
+                                confirmation.confirmed is not None
+                                and not confirmation.pending
+                            ),
                             periods=len(continuous_returns),
                             directional_agreement=directional_agreement,
                             supporting_signal=supporting_signal,

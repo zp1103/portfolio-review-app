@@ -91,6 +91,15 @@
             <em>{{ flow_source_labels.get(latest_flow_source, '暂不可用') }}</em>
           </div>
 
+          {% if analysis.portfolio.get('coverage_start') %}
+            <div class="coverage-summary">
+              <strong>数据覆盖</strong>
+              <span>{{ analysis.portfolio.coverage_start }} → {{ analysis.portfolio.coverage_end }}</span>
+              <span>连续有效 {{ analysis.portfolio.continuous_periods }} 期</span>
+              <span>有效截止 {{ analysis.portfolio.valid_through or '暂不可用' }}</span>
+            </div>
+          {% endif %}
+
           {% if analysis.portfolio.quality %}
             <aside class="analysis-quality" aria-label="数据质量提示">
               <strong>数据质量提示</strong>
@@ -221,7 +230,7 @@
             <div>
               <p class="mini-label">Comparison</p>
               <h2>分周期排名</h2>
-              <p>仅在同周期至少有两个可计算的主动观察产品时展示。</p>
+              <p>这是跨市场、跨风格观察池比较；仅在同周期至少有两个可计算的主动观察产品时展示。</p>
             </div>
           </header>
           <div class="comparison-grid">
@@ -232,7 +241,10 @@
                   <ol>
                     {% for row in analysis.comparison[period] %}
                       <li>
-                        <span><b>{{ row[2] }}</b>{{ row[0] }}</span>
+                        <span>
+                          <b>{{ row[2] }}</b>{{ row[0] }}
+                          <em class="ranking-group">{{ comparison_group_labels.get(row[3], '其他') }}</em>
+                        </span>
                         <strong>{{ '%.2f'|format(row[1] * 100) }}%</strong>
                       </li>
                     {% endfor %}
@@ -289,6 +301,14 @@
                     <div>
                       <dt>数据状态</dt>
                       <dd>{{ data_status_labels.get(product.data_status, '计算不可用') }}</dd>
+                    </div>
+                    <div>
+                      <dt>数据覆盖</dt>
+                      <dd>
+                        <span>{{ product.coverage_start }} → {{ product.coverage_end }}</span>
+                        <span>连续有效 {{ product.continuous_periods }} 期</span>
+                        <span>有效截止 {{ product.valid_through or '暂不可用' }}</span>
+                      </dd>
                     </div>
                   </dl>
                 </article>

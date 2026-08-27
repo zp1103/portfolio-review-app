@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -121,3 +122,88 @@ class ProductServiceTests(unittest.TestCase):
             portfolio_service.get_snapshot(original.id).holdings[0].product_name,
             "原产品",
         )
+
+    def test_bound_product_id_must_match_name_and_account_identity(self) -> None:
+        product_id = self.service.resolve_product(HoldingInput(
+            product_name="稳定身份产品",
+            account_type="普通账户",
+            amount=10000,
+            allocation_percent=100,
+            category="equity",
+        ))
+        portfolio_service = PortfolioService(self.database)
+
+        for product_name, account_type in (
+            ("冒名产品", "普通账户"),
+            ("稳定身份产品", "养老金账户"),
+        ):
+            with self.subTest(product_name=product_name, account_type=account_type):
+                with self.assertRaisesRegex(ValueError, "does not match"):
+                    portfolio_service.create_snapshot(SnapshotCreateInput(
+                        snapshot_date=(
+                            "2026-09-03"
+                            if account_type == "普通账户"
+                            else "2026-09-10"
+                        ),
+                        total_assets=10000,
+                        cash_balance=0,
+                        holdings=[HoldingInput(
+                            product_id=product_id,
+                            product_name=product_name,
+                            account_type=account_type,
+                            amount=10000,
+                            allocation_percent=100,
+                            category="equity",
+                        )],
+                    ))
+
+    def test_snapshot_rejects_duplicate_product_id_rows(self) -> None:
+        product_id = self.service.resolve_product(HoldingInput(
+            product_name="唯一产品",
+            account_type="普通账户",
+            amount=10000,
+            allocation_percent=100,
+            category="equity",
+        ))
+        holding = HoldingInput(
+            product_id=product_id,
+            product_name="唯一产品",
+            account_type="普通账户",
+            amount=5000,
+            allocation_percent=50,
+            category="equity",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Duplicate product_id"):
+            PortfolioService(self.database).create_snapshot(SnapshotCreateInput(
+                snapshot_date="2026-09-03",
+                total_assets=10000,
+                cash_balance=0,
+                holdings=[holding, holding],
+            ))
+
+    def test_failed_snapshot_write_rolls_back_new_product_profile(self) -> None:
+        portfolio_service = PortfolioService(self.database)
+        portfolio_service.create_snapshot(SnapshotCreateInput(
+            snapshot_date="2026-09-03",
+            total_assets=10000,
+            cash_balance=0,
+            holdings=[],
+        ))
+        before = len(self.service.list_products())
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            portfolio_service.create_snapshot(SnapshotCreateInput(
+                snapshot_date="2026-09-03",
+                total_assets=10000,
+                cash_balance=0,
+                holdings=[HoldingInput(
+                    product_name="不应残留的产品",
+                    account_type="普通账户",
+                    amount=10000,
+                    allocation_percent=100,
+                    category="equity",
+                )],
+            ))
+
+        self.assertEqual(len(self.service.list_products()), before)

@@ -1,3 +1,5 @@
+import sqlite3
+
 from app.db import Database
 from app.schemas import HoldingInput, ProductRecord, ProductUpdateInput
 
@@ -13,18 +15,39 @@ class ProductService:
             ).fetchall()
         return [self._from_row(row) for row in rows]
 
-    def get_product(self, product_id: int) -> ProductRecord:
-        with self.database.session() as connection:
-            row = connection.execute(
-                "SELECT * FROM portfolio_products WHERE id = ?", (product_id,)
-            ).fetchone()
+    def get_product(
+        self,
+        product_id: int,
+        connection: sqlite3.Connection | None = None,
+    ) -> ProductRecord:
+        if connection is None:
+            with self.database.session() as owned_connection:
+                return self.get_product(product_id, owned_connection)
+        row = connection.execute(
+            "SELECT * FROM portfolio_products WHERE id = ?", (product_id,)
+        ).fetchone()
         if row is None:
             raise ValueError(f"Product {product_id} not found")
         return self._from_row(row)
 
-    def resolve_product(self, holding: HoldingInput) -> int:
+    def resolve_product(
+        self,
+        holding: HoldingInput,
+        connection: sqlite3.Connection | None = None,
+    ) -> int:
+        if connection is None:
+            with self.database.session() as owned_connection:
+                return self.resolve_product(holding, owned_connection)
         if holding.product_id is not None:
-            self.get_product(holding.product_id)
+            product = self.get_product(holding.product_id, connection)
+            if (
+                product.canonical_name != holding.product_name
+                or product.account_type != holding.account_type
+            ):
+                raise ValueError(
+                    f"Product {holding.product_id} does not match holding "
+                    f"identity {holding.product_name} · {holding.account_type}"
+                )
             return holding.product_id
         default_role = (
             "long_term" if holding.account_type == "养老金账户"
@@ -32,29 +55,28 @@ class ProductService:
             else "stable" if holding.category == "fixed_income"
             else "active_watch"
         )
-        with self.database.session() as connection:
-            connection.execute(
-                """
-                INSERT OR IGNORE INTO portfolio_products (
-                    canonical_name, account_type, management_role,
-                    comparison_group, lifecycle_status
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    holding.product_name,
-                    holding.account_type,
-                    holding.management_role or default_role,
-                    holding.comparison_group or "other",
-                    holding.lifecycle_status or "active",
-                ),
-            )
-            row = connection.execute(
-                """
-                SELECT id FROM portfolio_products
-                WHERE canonical_name = ? AND account_type = ?
-                """,
-                (holding.product_name, holding.account_type),
-            ).fetchone()
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO portfolio_products (
+                canonical_name, account_type, management_role,
+                comparison_group, lifecycle_status
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                holding.product_name,
+                holding.account_type,
+                holding.management_role or default_role,
+                holding.comparison_group or "other",
+                holding.lifecycle_status or "active",
+            ),
+        )
+        row = connection.execute(
+            """
+            SELECT id FROM portfolio_products
+            WHERE canonical_name = ? AND account_type = ?
+            """,
+            (holding.product_name, holding.account_type),
+        ).fetchone()
         return int(row["id"])
 
     def update_product(

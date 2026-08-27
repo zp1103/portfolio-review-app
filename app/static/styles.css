@@ -1107,6 +1107,30 @@ textarea {
   border: 1px solid rgba(37, 45, 68, 0.06);
 }
 
+.coverage-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--muted);
+}
+
+.coverage-summary strong {
+  color: var(--ink);
+}
+
+.objective-metrics dd span {
+  display: block;
+}
+
+.ranking-group {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+}
+
 .latest-flow em {
   padding: 5px 9px;
   color: var(--accent);

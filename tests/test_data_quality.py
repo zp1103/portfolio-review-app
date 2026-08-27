@@ -85,6 +85,39 @@ class DataQualityServiceTests(unittest.TestCase):
             {"snapshot_date": "2026-08-21"},
         )
 
+    def test_confirmed_flag_without_amount_is_still_estimated_and_unconfirmed(
+        self,
+    ) -> None:
+        for snapshot_date, amount, pnl in (
+            ("2026-08-14", 100000, 0),
+            ("2026-08-21", 105000, 1000),
+        ):
+            self.service.create_snapshot(SnapshotCreateInput(
+                snapshot_date=snapshot_date,
+                total_assets=amount,
+                cash_balance=amount,
+                weekly_return_amount=pnl,
+                external_net_flow_amount=None,
+                external_flow_confirmed=True,
+                holdings=[HoldingInput(
+                    product_name="现金",
+                    account_type="货币/现金账户",
+                    amount=amount,
+                    allocation_percent=100,
+                    category="cash",
+                )],
+            ))
+
+        cashflow = self.service.get_cashflow_analysis()
+        issue_types = {
+            issue["type"]
+            for issue in self.service.get_data_quality_checks()["issues"]
+        }
+
+        self.assertEqual(cashflow["net_flow"], 4000)
+        self.assertEqual(cashflow["source"], "estimated")
+        self.assertIn("external_flow_unconfirmed", issue_types)
+
     def test_quality_checks_passed_with_valid_data(self) -> None:
         self.service.create_snapshot(
             SnapshotCreateInput(
