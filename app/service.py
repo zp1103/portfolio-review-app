@@ -146,6 +146,9 @@ class PortfolioService:
 
             return snapshots
 
+    def list_snapshots_chronologically(self) -> list[SnapshotRecord]:
+        return list(reversed(self.list_snapshots()))
+
     def get_allocation_summary(self) -> AllocationSummary:
         snapshots = self.list_snapshots()
         if not snapshots:
