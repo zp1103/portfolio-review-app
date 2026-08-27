@@ -1096,7 +1096,15 @@ textarea {
 }
 
 .latest-flow {
-  justify-items: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface-muted);
+  border: 1px solid rgba(37, 45, 68, 0.06);
 }
 
 .latest-flow em {
@@ -1164,6 +1172,42 @@ textarea {
 
 .trend-evidence strong {
   color: var(--ink);
+}
+
+.active-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.active-metrics div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(29, 40, 65, 0.035);
+}
+
+.active-metrics dt,
+.active-metrics dd {
+  margin: 0;
+}
+
+.active-metrics dt,
+.active-metrics dd span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.active-metrics dd {
+  font-weight: 700;
+}
+
+.active-metrics dd span {
+  display: block;
+  margin-top: 3px;
+  font-weight: 500;
 }
 
 .comparison-grid {
@@ -1292,7 +1336,9 @@ textarea {
   .metric-grid,
   .horizon-grid,
   .trend-grid,
-  .objective-metrics {
+  .objective-metrics,
+  .active-metrics,
+  .latest-flow {
     grid-template-columns: 1fr;
   }
 

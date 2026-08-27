@@ -72,6 +72,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn("数据积累中", response.text)
         self.assertIn("trend-v1", response.text)
         self.assertIn("不构成涨跌预测、交易建议或调仓指令", response.text)
+        self.assertIn("最新外部净资金流", response.text)
+        self.assertIn("<strong>计算不可用</strong>", response.text)
+        self.assertIn("<em>暂不可用</em>", response.text)
         self.assertNotIn("0.00%", response.text)
 
     def test_analysis_page_separates_active_and_objective_products(self) -> None:
@@ -88,6 +91,32 @@ class ApiTests(unittest.TestCase):
         self.assertIn("养老金中证500增强", response.text)
         self.assertEqual(response.text.count("确认状态："), 1)
         self.assertNotIn("自动调仓", response.text)
+
+        active_card = response.text.split(
+            "<strong>科创50</strong>", 1
+        )[1].split("</article>", 1)[0]
+        self.assertIn("比较分组", active_card)
+        self.assertIn("<dd>科创</dd>", active_card)
+        self.assertIn("当前回撤", active_card)
+        self.assertIn("0.00%", active_card)
+        self.assertIn("阶段高点", active_card)
+        self.assertIn("2026-08-21", active_card)
+        self.assertIn("连续表现", active_card)
+        self.assertIn("连续上行 8 期", active_card)
+        self.assertIn("动能变化", active_card)
+        self.assertIn("减弱", active_card)
+        self.assertNotIn("star50", active_card)
+        self.assertNotIn("weakening", active_card)
+
+        objective_card = response.text.split(
+            "<strong>养老金中证500增强</strong>", 1
+        )[1].split("</article>", 1)[0]
+        self.assertNotIn("<em>正常</em>", objective_card)
+        self.assertNotIn("比较分组", objective_card)
+        self.assertNotIn("连续表现", objective_card)
+        self.assertNotIn("动能变化", objective_card)
+        self.assertNotIn("确认状态", objective_card)
+        self.assertNotIn("证据强度", objective_card)
 
     def test_analysis_page_distinguishes_unavailable_states(self) -> None:
         first = self.client.post(
@@ -150,6 +179,19 @@ class ApiTests(unittest.TestCase):
         self.assertIn("计算不可用", response.text)
         self.assertIn("可比较产品不足", response.text)
         self.assertIn("系统估算", response.text)
+
+        invalid_card = response.text.split(
+            "<strong>无效计算产品</strong>", 1
+        )[1].split("</article>", 1)[0]
+        self.assertIn("比较分组", invalid_card)
+        self.assertIn("<dd>其他</dd>", invalid_card)
+        self.assertIn("当前回撤", invalid_card)
+        self.assertIn("阶段高点", invalid_card)
+        self.assertIn("连续表现", invalid_card)
+        self.assertIn("暂无连续方向", invalid_card)
+        self.assertIn("动能变化", invalid_card)
+        self.assertIn("计算不可用", invalid_card)
+        self.assertNotIn("0.00%", invalid_card)
 
     def test_analysis_page_keeps_exited_products_in_collapsed_history(self) -> None:
         self._seed_performance_history()

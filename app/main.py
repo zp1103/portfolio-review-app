@@ -59,7 +59,23 @@ DATA_STATUS_LABELS = {
 FLOW_SOURCE_LABELS = {
     "confirmed": "已确认",
     "estimated": "系统估算",
-    "unavailable": "计算不可用",
+    "unavailable": "暂不可用",
+}
+COMPARISON_GROUP_LABELS = {
+    "broad": "宽基",
+    "star50": "科创",
+    "hang_seng": "恒生",
+    "other": "其他",
+}
+STREAK_DIRECTION_LABELS = {
+    "up": "连续上行",
+    "down": "连续下行",
+    "flat": "暂无连续方向",
+}
+MOMENTUM_DIRECTION_LABELS = {
+    "strengthening": "增强",
+    "weakening": "减弱",
+    "flat": "持平",
 }
 
 
@@ -156,6 +172,9 @@ def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> FastAPI:
                 "lifecycle_labels": LIFECYCLE_LABELS,
                 "data_status_labels": DATA_STATUS_LABELS,
                 "flow_source_labels": FLOW_SOURCE_LABELS,
+                "comparison_group_labels": COMPARISON_GROUP_LABELS,
+                "streak_direction_labels": STREAK_DIRECTION_LABELS,
+                "momentum_direction_labels": MOMENTUM_DIRECTION_LABELS,
             },
         )
 
