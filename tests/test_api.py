@@ -141,6 +141,10 @@ class ApiTests(unittest.TestCase):
         response = self.client.get("/analysis")
 
         self.assertEqual(response.status_code, 200)
+        self.assertRegex(
+            response.text,
+            r'href="/static/styles\.css\?v=[^"]+"',
+        )
         active_card_match = re.search(
             r'<article class="trend-card active-trend-card">.*?'
             r'<strong>科创50</strong>.*?</article>',
