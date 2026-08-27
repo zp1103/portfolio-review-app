@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from app.db import Database
+from app.product_service import ProductService
 from app.schemas import (
     AllocationSummary,
     CategorySummary,
@@ -36,8 +37,13 @@ LOOKTHROUGH_CATEGORIES = ("equity", "fixed_income", "cash", "gold", "other")
 class PortfolioService:
     def __init__(self, database: Database) -> None:
         self.database = database
+        self.product_service = ProductService(database)
 
     def create_snapshot(self, payload: SnapshotCreateInput) -> SnapshotRecord:
+        resolved_holdings = [
+            (holding, self.product_service.resolve_product(holding))
+            for holding in payload.holdings
+        ]
         with self.database.session() as connection:
             cursor = connection.execute(
                 """
@@ -63,21 +69,19 @@ class PortfolioService:
             )
             snapshot_id = cursor.lastrowid
 
-            for holding in payload.holdings:
-                self._insert_holding(connection, snapshot_id, holding)
+            for holding, product_id in resolved_holdings:
+                self._insert_holding(connection, snapshot_id, holding, product_id)
 
             connection.commit()
             return self.get_snapshot(snapshot_id)
 
     def update_snapshot(self, snapshot_id: int, payload: SnapshotCreateInput) -> SnapshotRecord:
+        self.get_snapshot(snapshot_id)
+        resolved_holdings = [
+            (holding, self.product_service.resolve_product(holding))
+            for holding in payload.holdings
+        ]
         with self.database.session() as connection:
-            existing = connection.execute(
-                "SELECT id FROM weekly_snapshots WHERE id = ?",
-                (snapshot_id,),
-            ).fetchone()
-            if existing is None:
-                raise ValueError(f"Snapshot {snapshot_id} not found")
-
             connection.execute(
                 """
                 UPDATE weekly_snapshots
@@ -102,8 +106,8 @@ class PortfolioService:
                 ),
             )
             connection.execute("DELETE FROM holdings WHERE snapshot_id = ?", (snapshot_id,))
-            for holding in payload.holdings:
-                self._insert_holding(connection, snapshot_id, holding)
+            for holding, product_id in resolved_holdings:
+                self._insert_holding(connection, snapshot_id, holding, product_id)
 
             connection.commit()
             return self.get_snapshot(snapshot_id)
@@ -379,11 +383,18 @@ class PortfolioService:
         ).fetchall()
         return [holding_from_row(row) for row in rows]
 
-    def _insert_holding(self, connection, snapshot_id: int, holding: HoldingInput) -> None:
+    def _insert_holding(
+        self,
+        connection,
+        snapshot_id: int,
+        holding: HoldingInput,
+        product_id: int,
+    ) -> None:
         connection.execute(
             """
             INSERT INTO holdings (
                 snapshot_id,
+                product_id,
                 product_name,
                 account_type,
                 amount,
@@ -403,10 +414,11 @@ class PortfolioService:
                 exposure_gold_percent,
                 exposure_other_percent,
                 notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
+                product_id,
                 holding.product_name,
                 holding.account_type,
                 holding.amount,

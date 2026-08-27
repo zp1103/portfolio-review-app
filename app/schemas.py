@@ -8,11 +8,30 @@ from pydantic import BaseModel, Field
 
 Category = Literal["equity", "fixed_income", "cash", "gold", "other"]
 Action = Literal["buy", "sell", "hold", "rebalance"]
+ManagementRole = Literal["active_watch", "long_term", "stable", "liquidity"]
+ComparisonGroup = Literal["broad", "star50", "hang_seng", "other"]
+LifecycleStatus = Literal["active", "planned_exit", "exited"]
+
+
+class ProductUpdateInput(BaseModel):
+    management_role: ManagementRole
+    comparison_group: ComparisonGroup = "other"
+    lifecycle_status: LifecycleStatus = "active"
+
+
+class ProductRecord(ProductUpdateInput):
+    id: int
+    canonical_name: str
+    account_type: str
 
 
 class HoldingInput(BaseModel):
+    product_id: int | None = None
     product_name: str = Field(min_length=1, max_length=100)
     account_type: str = Field(min_length=1, max_length=50)
+    management_role: ManagementRole | None = None
+    comparison_group: ComparisonGroup | None = None
+    lifecycle_status: LifecycleStatus | None = None
     amount: float = Field(ge=0)
     allocation_percent: float = Field(ge=0, le=100)
     category: Category
@@ -93,6 +112,7 @@ def holding_from_row(row: Mapping[str, object]) -> HoldingRecord:
     return HoldingRecord(
         id=int(row["id"]),
         snapshot_id=int(row["snapshot_id"]),
+        product_id=int(row["product_id"]) if row["product_id"] is not None else None,
         product_name=str(row["product_name"]),
         account_type=str(row["account_type"]),
         amount=float(row["amount"]),
