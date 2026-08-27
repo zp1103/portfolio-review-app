@@ -89,14 +89,18 @@ class ApiTests(unittest.TestCase):
         self.assertIn("资金流调整净值", response.text)
         self.assertIn("长期与稳定资产", response.text)
         self.assertIn("养老金中证500增强", response.text)
-        self.assertEqual(response.text.count("确认状态："), 1)
+        self.assertIn("确认进度", response.text)
         self.assertNotIn("自动调仓", response.text)
 
-        active_card = response.text.split(
-            "<strong>科创50</strong>", 1
-        )[1].split("</article>", 1)[0]
-        self.assertIn("比较分组", active_card)
-        self.assertIn("<dd>科创</dd>", active_card)
+        active_card_match = re.search(
+            r'<article class="trend-card active-trend-card">.*?'
+            r'<strong>科创50</strong>.*?</article>',
+            response.text,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(active_card_match)
+        active_card = active_card_match.group(0)
+        self.assertIn("普通账户 · 科创 · 正常", active_card)
         self.assertIn("当前回撤", active_card)
         self.assertIn("0.00%", active_card)
         self.assertIn("阶段高点", active_card)
@@ -105,6 +109,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("连续上行 8 期", active_card)
         self.assertIn("动能变化", active_card)
         self.assertIn("减弱", active_card)
+        self.assertIn("确认进度", active_card)
         self.assertNotIn("star50", active_card)
         self.assertNotIn("weakening", active_card)
 
@@ -129,6 +134,43 @@ class ApiTests(unittest.TestCase):
         self.assertIn("2026-06-26 → 2026-08-21", portfolio_section)
         self.assertIn("连续有效 8 期", portfolio_section)
         self.assertIn("有效截止 2026-08-21", portfolio_section)
+
+    def test_active_watch_card_prioritizes_summary_and_collapses_details(self) -> None:
+        self._seed_performance_history()
+
+        response = self.client.get("/analysis")
+
+        self.assertEqual(response.status_code, 200)
+        active_card_match = re.search(
+            r'<article class="trend-card active-trend-card">.*?'
+            r'<strong>科创50</strong>.*?</article>',
+            response.text,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(active_card_match)
+        active_card = active_card_match.group(0)
+
+        self.assertIn('class="trend-card-summary"', active_card)
+        self.assertIn('class="trend-status-summary"', active_card)
+        self.assertIn('class="trend-core-metrics"', active_card)
+        self.assertIn('<details class="trend-details">', active_card)
+        self.assertIn("趋势依据与阶段信息", active_card)
+
+        status_position = active_card.index('class="trend-status-summary"')
+        metrics_position = active_card.index('class="trend-core-metrics"')
+        details_position = active_card.index('<details class="trend-details">')
+        self.assertLess(status_position, metrics_position)
+        self.assertLess(metrics_position, details_position)
+
+        summary = active_card[:details_position]
+        for label in ("4期收益", "8期收益", "12期收益", "当前回撤"):
+            self.assertIn(label, summary)
+
+        details = active_card[details_position:]
+        for label in ("动能变化", "连续表现", "阶段高点", "确认进度"):
+            self.assertIn(label, details)
+
+        self.assertNotIn('<dl class="active-metrics">', active_card)
 
     def test_ranking_rows_show_localized_group_and_cross_market_context(self) -> None:
         self._seed_performance_history()
@@ -223,8 +265,7 @@ class ApiTests(unittest.TestCase):
         invalid_card = response.text.split(
             "<strong>无效计算产品</strong>", 1
         )[1].split("</article>", 1)[0]
-        self.assertIn("比较分组", invalid_card)
-        self.assertIn("<dd>其他</dd>", invalid_card)
+        self.assertIn("普通账户 · 其他 · 正常", invalid_card)
         self.assertIn("当前回撤", invalid_card)
         self.assertIn("阶段高点", invalid_card)
         self.assertIn("连续表现", invalid_card)

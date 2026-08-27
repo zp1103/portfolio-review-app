@@ -123,97 +123,113 @@
           {% if analysis.active_products %}
             <div class="trend-grid">
               {% for product in analysis.active_products %}
-                <article class="trend-card">
-                  <header>
-                    <div>
-                      <strong>{{ product.name }}</strong>
-                      <span>{{ product.account_type }}</span>
-                    </div>
-                    <em>{{ lifecycle_labels.get(product.lifecycle, product.lifecycle) }}</em>
-                  </header>
-                  <div class="horizon-grid">
-                    {% for period in [4, 8, 12] %}
+                <article class="trend-card active-trend-card">
+                  <div class="trend-card-summary">
+                    <header>
+                      <div class="trend-card-identity">
+                        <strong>{{ product.name }}</strong>
+                        <span>
+                          {{ product.account_type }} · {{ comparison_group_labels.get(product.group, '其他') }} · {{ lifecycle_labels.get(product.lifecycle, product.lifecycle) }}
+                        </span>
+                      </div>
+                      <div class="trend-status-summary">
+                        <strong class="trend-status-badge">
+                          {% if product.confirmed_state is defined and product.confirmed_state %}
+                            {{ state_labels.get(product.confirmed_state, '尚未确认') }}{% if product.confirmed_state == 'turning' and product.confirmed_detail %} · {{ turning_detail_labels.get(product.confirmed_detail, product.confirmed_detail) }}{% endif %}
+                          {% elif product.pending %}
+                            {{ state_labels.get(product.candidate_state, '尚未确认') }} · 待确认
+                          {% elif product.confirmed_state is defined %}
+                            尚未确认
+                          {% else %}
+                            数据积累中
+                          {% endif %}
+                        </strong>
+                        <span>
+                          {{ data_status_labels.get(product.data_status, '计算不可用') }}{% if product.evidence is defined %} · 证据{{ evidence_labels.get(product.evidence, '低') }}{% endif %}
+                        </span>
+                      </div>
+                    </header>
+
+                    <div class="trend-core-metrics">
+                      {% for period in [4, 8, 12] %}
+                        <div>
+                          <span>{{ period }}期收益</span>
+                          {% if product.returns[period] is not none %}
+                            <strong>{{ '%.2f'|format(product.returns[period] * 100) }}%</strong>
+                          {% elif product.data_status == 'available' %}
+                            <strong>数据积累中</strong>
+                          {% else %}
+                            <strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong>
+                          {% endif %}
+                        </div>
+                      {% endfor %}
                       <div>
-                        <span>{{ period }}期收益</span>
-                        {% if product.returns[period] is not none %}
-                          <strong>{{ '%.2f'|format(product.returns[period] * 100) }}%</strong>
+                        <span>当前回撤</span>
+                        {% if product.current_drawdown is not none %}
+                          <strong>{{ '%.2f'|format(product.current_drawdown * 100) }}%</strong>
                         {% elif product.data_status == 'available' %}
                           <strong>数据积累中</strong>
                         {% else %}
                           <strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong>
                         {% endif %}
                       </div>
-                    {% endfor %}
+                    </div>
                   </div>
-                  <dl class="active-metrics">
-                    <div>
-                      <dt>比较分组</dt>
-                      <dd>{{ comparison_group_labels.get(product.group, '其他') }}</dd>
+
+                  <details class="trend-details">
+                    <summary>趋势依据与阶段信息</summary>
+                    <div class="trend-detail-grid">
+                      <div>
+                        <span>动能变化</span>
+                        <strong>
+                          {% if product.momentum %}
+                            {{ momentum_direction_labels.get(product.momentum.direction, '计算不可用') }}
+                            <small>近4期较前4期 {% if product.momentum.delta > 0 %}+{% endif %}{{ '%.2f'|format(product.momentum.delta * 100) }} 个百分点</small>
+                          {% elif product.data_status == 'available' %}
+                            数据积累中
+                          {% else %}
+                            {{ data_status_labels.get(product.data_status, '计算不可用') }}
+                          {% endif %}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>连续表现</span>
+                        <strong>
+                          {% if product.streak[1] > 0 %}
+                            {{ streak_direction_labels.get(product.streak[0], '暂无连续方向') }} {{ product.streak[1] }} 期
+                          {% else %}
+                            暂无连续方向
+                          {% endif %}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>阶段高点</span>
+                        <strong>
+                          {% if product.high_date %}
+                            {{ product.high_date }}
+                          {% elif product.data_status == 'available' %}
+                            数据积累中
+                          {% else %}
+                            {{ data_status_labels.get(product.data_status, '计算不可用') }}
+                          {% endif %}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>确认进度</span>
+                        <strong>
+                          {% if product.pending %}
+                            {{ state_labels.get(product.candidate_state, '尚未确认') }}{% if product.candidate_detail %} · {{ turning_detail_labels.get(product.candidate_detail, product.candidate_detail) }}{% endif %} · 待确认 1/2
+                          {% elif product.confirmed_state is defined and product.confirmed_state %}
+                            已确认 · {{ state_labels.get(product.confirmed_state, product.confirmed_state) }}{% if product.confirmed_state == 'turning' and product.confirmed_detail %} · {{ turning_detail_labels.get(product.confirmed_detail, product.confirmed_detail) }}{% endif %}
+                          {% elif product.confirmed_state is defined %}
+                            尚未确认
+                          {% else %}
+                            数据积累中
+                          {% endif %}
+                        </strong>
+                      </div>
                     </div>
-                    <div>
-                      <dt>当前回撤</dt>
-                      <dd>
-                        {% if product.current_drawdown is not none %}
-                          {{ '%.2f'|format(product.current_drawdown * 100) }}%
-                        {% elif product.data_status == 'available' %}
-                          数据积累中
-                        {% else %}
-                          {{ data_status_labels.get(product.data_status, '计算不可用') }}
-                        {% endif %}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>阶段高点</dt>
-                      <dd>
-                        {% if product.high_date %}
-                          {{ product.high_date }}
-                        {% elif product.data_status == 'available' %}
-                          数据积累中
-                        {% else %}
-                          {{ data_status_labels.get(product.data_status, '计算不可用') }}
-                        {% endif %}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>连续表现</dt>
-                      <dd>
-                        {% if product.streak[1] > 0 %}
-                          {{ streak_direction_labels.get(product.streak[0], '暂无连续方向') }} {{ product.streak[1] }} 期
-                        {% else %}
-                          暂无连续方向
-                        {% endif %}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>动能变化</dt>
-                      <dd>
-                        {% if product.momentum %}
-                          {{ momentum_direction_labels.get(product.momentum.direction, '计算不可用') }}
-                          <span>近4期较前4期 {% if product.momentum.delta > 0 %}+{% endif %}{{ '%.2f'|format(product.momentum.delta * 100) }} 个百分点</span>
-                        {% elif product.data_status == 'available' %}
-                          数据积累中
-                        {% else %}
-                          {{ data_status_labels.get(product.data_status, '计算不可用') }}
-                        {% endif %}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div class="trend-evidence">
-                    <p>数据状态：<strong>{{ data_status_labels.get(product.data_status, '计算不可用') }}</strong></p>
-                    {% if product.confirmed_state is defined %}
-                      <p>
-                        确认状态：<strong>{{ state_labels.get(product.confirmed_state, '尚未确认') }}</strong>{% if product.confirmed_state == 'turning' and product.confirmed_detail %}（{{ turning_detail_labels.get(product.confirmed_detail, product.confirmed_detail) }}）{% endif %}
-                      </p>
-                      {% if product.pending %}
-                        <p>
-                          候选状态：<strong>{{ state_labels.get(product.candidate_state, '尚未确认') }}</strong>{% if product.candidate_detail %}（{{ turning_detail_labels.get(product.candidate_detail, product.candidate_detail) }}）{% endif %}，待确认 1/2
-                        </p>
-                      {% endif %}
-                      <p>证据强度：<strong>{{ evidence_labels.get(product.evidence, '低') }}</strong></p>
-                    {% else %}
-                      <p>确认状态：<strong>数据积累中</strong></p>
-                    {% endif %}
-                  </div>
+                  </details>
                 </article>
               {% endfor %}
             </div>
