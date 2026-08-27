@@ -751,10 +751,15 @@
       const externalFlowInput = document.getElementById("external-net-flow-input");
       const externalFlowConfirmed = document.getElementById("external-flow-confirmed");
       const previousTotalAssetsInput = document.getElementById("previous-total-assets");
+      let externalFlowIsManual = externalFlowInput?.value !== "";
       let rowIndex = holdingsContainer.querySelectorAll(".holding-row").length;
 
+      externalFlowInput?.addEventListener("input", () => {
+        externalFlowIsManual = true;
+      });
+
       function recalculateExternalFlow() {
-        if (!externalFlowInput || externalFlowConfirmed?.checked) return;
+        if (!externalFlowInput || externalFlowConfirmed?.checked || externalFlowIsManual) return;
         const previous = Number(previousTotalAssetsInput?.value || NaN);
         const total = Number(totalAssetsInput?.value || 0);
         const pnl = Number(weeklyReturnInput?.value || 0);

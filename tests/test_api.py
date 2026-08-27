@@ -1,4 +1,6 @@
+import re
 import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -325,6 +327,103 @@ class ApiTests(unittest.TestCase):
             'name="external_flow_confirmed" value="1" checked',
             copied.text,
         )
+
+    def test_external_flow_script_preserves_persisted_and_manual_values(self) -> None:
+        created = self.client.post(
+            "/api/weekly-snapshots",
+            json={
+                "snapshot_date": "2026-08-21",
+                "total_assets": 110000,
+                "cash_balance": 10000,
+                "weekly_return_amount": 2000,
+                "external_net_flow_amount": 8000,
+                "external_flow_confirmed": False,
+                "holdings": [
+                    {
+                        "product_name": "现金",
+                        "account_type": "货币/现金账户",
+                        "amount": 110000,
+                        "allocation_percent": 100,
+                        "category": "cash",
+                    }
+                ],
+            },
+        ).json()
+        response = self.client.get(f"/?edit_id={created['id']}")
+        flow_value_match = re.search(
+            r'id="external-net-flow-input"\s+'
+            r'name="external_net_flow_amount" value="([^"]*)"',
+            response.text,
+        )
+        self.assertIsNotNone(flow_value_match)
+        self.assertEqual(flow_value_match.group(1), "8000.0")
+        script_matches = re.findall(r"<script>(.*?)</script>", response.text, re.DOTALL)
+        self.assertEqual(len(script_matches), 1)
+
+        harness = """
+function makeInput(value = "", checked = false) {
+  const listeners = {};
+  return {
+    value,
+    checked,
+    addEventListener(type, listener) { listeners[type] = listener; },
+    dispatch(type) { listeners[type]?.({ target: this }); },
+  };
+}
+
+const elements = {
+  "holdings-container": {
+    querySelectorAll() { return []; },
+    insertAdjacentHTML() {},
+    lastElementChild: null,
+  },
+  "add-holding-button-bottom": null,
+  "holding-row-template": { innerHTML: "" },
+  "total-assets-input": makeInput("110000"),
+  "cash-balance-input": makeInput("10000"),
+  "weekly-return-input": makeInput("2000"),
+  "weekly-return-rate-input": makeInput(""),
+  "ytd-return-input": makeInput(""),
+  "external-net-flow-input": makeInput("8000.0"),
+  "external-flow-confirmed": makeInput("", false),
+  "previous-total-assets": makeInput("100000"),
+};
+
+globalThis.document = {
+  getElementById(id) { return elements[id] ?? null; },
+};
+"""
+        assertions = """
+if (externalFlowInput.value !== "8000.0") {
+  throw new Error(`initial persisted value overwritten: ${externalFlowInput.value}`);
+}
+
+externalFlowInput.value = "7500";
+externalFlowInput.dispatch("input");
+totalAssetsInput.value = "120000";
+weeklyReturnInput.value = "3000";
+recalculateExternalFlow();
+
+if (externalFlowInput.value !== "7500") {
+  throw new Error(`manual value overwritten after recalculation: ${externalFlowInput.value}`);
+}
+"""
+        node_binary = shutil.which("node")
+        if node_binary is None:
+            bundled_node = (
+                Path.home()
+                / ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
+            )
+            self.assertTrue(bundled_node.is_file(), "Node.js runtime is required")
+            node_binary = str(bundled_node)
+        result = subprocess.run(
+            [node_binary, "-e", harness + script_matches[0] + assertions],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_form_submission_derives_pnl_from_previous_snapshot_and_transaction(self) -> None:
         response = self.client.post(
